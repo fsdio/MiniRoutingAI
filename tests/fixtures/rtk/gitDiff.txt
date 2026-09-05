@@ -1,0 +1,82 @@
+diff --git a/src/app.ts b/src/app.ts
+index abc123..def456 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -1,50 +1,50 @@
+ import { foo } from "./foo";
+ import { bar } from "./bar";
+-const oldLine1 = "hello";
+-const oldLine2 = "world";
+-const oldLine3 = "test";
++const newLine1 = "hello updated";
++const newLine2 = "world updated";
++const newLine3 = "test updated";
+ function doSomething() {
+   console.log("line4");
+   console.log("line5");
+   console.log("line6");
+   console.log("line7");
+   console.log("line8");
+   console.log("line9");
+   console.log("line10");
+   console.log("line11");
+   console.log("line12");
+   console.log("line13");
+   console.log("line14");
+   console.log("line15");
+   console.log("line16");
+   console.log("line17");
+   console.log("line18");
+   console.log("line19");
+   console.log("line20");
+   console.log("line21");
+   console.log("line22");
+   console.log("line23");
+   console.log("line24");
+   console.log("line25");
+   console.log("line26");
+   console.log("line27");
+   console.log("line28");
+   console.log("line29");
+   console.log("line30");
+   console.log("line31");
+   console.log("line32");
+   console.log("line33");
+   console.log("line34");
+   console.log("line35");
+   console.log("line36");
+   console.log("line37");
+   console.log("line38");
+   console.log("line39");
+   console.log("line40");
+   console.log("line41");
+   console.log("line42");
+   console.log("line43");
+   console.log("line44");
+   console.log("line45");
+   console.log("line46");
+   console.log("line47");
+   console.log("line48");
+   console.log("line49");
+   console.log("line50");
++  console.log("added line 51");
++  console.log("added line 52");
++  console.log("added line 53");
++  console.log("added line 54");
++  console.log("added line 55");
++  console.log("added line 56");
++  console.log("added line 57");
++  console.log("added line 58");
++  console.log("added line 59");
++  console.log("added line 60");
+}
+@@ -51,10 +51,10 @@ function another() {
+   return true;
+ }
+diff --git a/src/utils.ts b/src/utils.ts
+index 111..222 100644
+--- a/src/utils.ts
++++ b/src/utils.ts
+@@ -1,20 +1,20 @@
+- old util line
++ new util line

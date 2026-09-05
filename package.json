@@ -1,0 +1,25 @@
+{
+  "name": "mini-routingai",
+  "version": "0.1.0",
+  "description": "MiniRoutingAI — lightweight Bun + TypeScript LLM gateway",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "start": "bun run src/index.ts",
+    "start:bg": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 start",
+    "stop": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 stop",
+    "restart": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 restart",
+    "status": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 status",
+    "logs": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 logs",
+    "headroom:start": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 headroom-start",
+    "headroom:stop": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 headroom-stop",
+    "test": "bun test",
+    "benchmark": "bun run scripts/benchmark.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  }
+}

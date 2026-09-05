@@ -1,0 +1,24 @@
+src/app.ts:10:import { foo } from "./foo"
+src/app.ts:20:const x = foo("hello world")
+src/app.ts:30:function test() { return foo("another") }
+src/utils.ts:5:export const bar = "grep test"
+src/utils.ts:15:bar.includes("test")
+src/utils.ts:25:console.log(bar)
+src/server/server.ts:100:if (method === "GET" && path === "/health") {
+src/server/server.ts:150:const profile = analyzeRequest(chatReq)
+src/router/router.ts:20:function getCandidates() {
+src/telemetry/logger.ts:10:export const logger = {
+src/telemetry/metrics.ts:10:export function recordMetric() {
+src/types/index.ts:5:export interface ChatMessage {
+src/app.ts:40:foo("duplicate content for grep cap test")
+src/app.ts:41:foo("duplicate content for grep cap test")
+src/app.ts:42:foo("duplicate content for grep cap test")
+src/app.ts:43:foo("duplicate content for grep cap test")
+src/app.ts:44:foo("duplicate content for grep cap test")
+src/app.ts:45:foo("duplicate content for grep cap test")
+src/app.ts:46:foo("duplicate content for grep cap test")
+src/app.ts:47:foo("duplicate content for grep cap test")
+src/app.ts:48:foo("duplicate content for grep cap test")
+src/app.ts:49:foo("duplicate content for grep cap test")
+src/app.ts:50:foo("duplicate content for grep cap test")
+src/app.ts:51:foo("should be capped at 10 per file")

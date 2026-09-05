@@ -1,0 +1,11 @@
+{
+  "optimizers": {
+    "rtk": { "enabled": true, "minBytes": 500, "timeoutMs": 500, "failOpen": true },
+    "headroom": { "enabled": true, "minimumTokens": 3000, "minimumBytes": 6000, "timeoutMs": 3000, "failOpen": true, "url": "http://localhost:8787", "maxConsecutiveFailures": 3, "cooldownMs": 30000, "healthProbeMs": 1000, "compressUserMessages": true, "cacheTtlMs": 3000 },
+    "caveman": { "enabled": true, "mode": "lite" },
+    "ponytail": { "enabled": true, "mode": "lite" },
+    "errorMemory": { "enabled": true, "ttlMs": 300000, "cooldownMs": 30000 },
+    "duplicateCache": { "enabled": true, "ttlMs": 3000 },
+    "adaptive": { "enabled": true }
+  }
+}

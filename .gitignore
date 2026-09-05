@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+benchmark-results.json
+*.log
+logs/
+data/
+.mini-routingai.pid
+.headroom.pid
+.env.tmp.start
+.DS_Store
+Thumbs.db
+*.pid

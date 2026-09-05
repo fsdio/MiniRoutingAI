@@ -1,0 +1,13 @@
+total 128
+drwxr-xr-x  2 user group 4096 Jan  1 12:00 .
+drwxr-xr-x  5 user group 4096 Jan  1 12:00 ..
+-rw-r--r--  1 user group  1234 Jan  1 12:00 file1.txt
+-rw-r--r--  1 user group  2345 Jan  1 12:00 file2.txt
+-rw-r--r--  1 user group  3456 Jan  1 12:00 file3.txt
+-rw-r--r--  1 user group  4567 Jan  1 12:00 file4.txt
+-rw-r--r--  1 user group  5678 Jan  1 12:00 file5.txt
+drwxr-xr-x  2 user group 4096 Jan  1 12:00 subdir1
+-rw-r--r--  1 user group  6789 Jan  1 12:00 subdir1/nested.txt
+drwxr-xr-x  2 user group 4096 Jan  1 12:00 node_modules
+drwxr-xr-x  2 user group 4096 Jan  1 12:00 .git
+-rw-r--r--  1 user group  7890 Jan  1 12:00 largefile.bin

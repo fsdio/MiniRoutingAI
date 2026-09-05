@@ -1,0 +1,61 @@
+{
+  "providers": [
+    {
+      "id": "opencode-go",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "apiKeyEnv": "OPENCODE_GO_API_KEY",
+      "models": ["deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "minimax-m3"],
+      "defaultWeight": 10,
+      "tags": ["fast", "coding", "vision"],
+      "avgLatencyMs": 800
+    },
+    {
+      "id": "openrouter",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "models": ["deepseek/deepseek-v4-flash-0731", "~deepseek/deepseek-v4-flash-latest", "nvidia/nemotron-3-ultra-550b-a55b:free", "minimax/minimax-m3:free"],
+      "defaultWeight": 5,
+      "tags": ["free", "variety"],
+      "avgLatencyMs": 1500
+    },
+    {
+      "id": "nvidia",
+      "baseURL": "https://integrate.api.nvidia.com/v1",
+      "apiKeyEnv": "NVIDIA_API_KEY",
+      "models": ["nvidia/nemotron-3-ultra-550b-a55b", "minimaxai/minimax-m3"],
+      "defaultWeight": 4,
+      "tags": ["reasoning", "enterprise"],
+      "avgLatencyMs": 2000
+    },
+    {
+      "id": "ollama-cloud",
+      "baseURL": "https://ollama.com/v1",
+      "apiKeyEnv": "OLLAMA_CLOUD_API_KEY",
+      "models": ["nemotron-3-ultra:cloud", "gemma4:31b"],
+      "defaultWeight": 7,
+      "tags": ["reasoning", "quality"],
+      "avgLatencyMs": 1200
+    },
+    {
+      "id": "opencode",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "models": [
+        "muse-spark-1.3-contributor-free",
+        "mimo-v2.5-free",
+        "nemotron-3-ultra-free"
+      ],
+      "defaultWeight": 5,
+      "tags": ["free", "contributor"],
+      "avgLatencyMs": 1800
+    },
+    {
+      "id": "juan",
+      "baseURL": "https://router.juan.web.id/v1",
+      "apiKeyEnv": "JUAN_API_KEY",
+      "models": ["nemotron-3-ultra", "glm-5.3-flash", "minimax-m3", "gemini-3.8-flash-high" ],
+      "defaultWeight": 3,
+      "tags": ["multilingual", "fast"],
+      "avgLatencyMs": 2500
+    }
+  ]
+}
