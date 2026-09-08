@@ -56,6 +56,25 @@ function resolveTargetModel(requestModel: string, targetModel: string): string {
   return targetModel;
 }
 
+export function resolveRouteKeyForModel(requestModel: string, routes: RoutesFile): string {
+  const normalized = requestModel.split("/").pop() ?? requestModel;
+  if (normalized.startsWith("mini-")) {
+    // Warning alias legacy agar observability jelas — kanonik kini mini-routingai
+    const prefixLower = requestModel.split("/")[0]?.toLowerCase() ?? "";
+    if (prefixLower === "mini-9router") {
+      // eslint-disable-next-line no-console
+      console.warn(`[router] deprecated alias "mini-9router/${normalized}" — gunakan "mini-routingai/${normalized}"`);
+    } else if (prefixLower === "miniroutingai" || prefixLower === "minirouting-ai") {
+      // eslint-disable-next-line no-console
+      console.warn(`[router] alias "MiniRoutingAI/${normalized}" diterima — kanonik "mini-routingai/${normalized}"`);
+    }
+    // Model "mini-<route>" → route bernama (mis. "mini-free" → "free", "mini-balanced" → "balanced")
+    const key = normalized.slice("mini-".length);
+    if (routes.routes[key]) return key;
+  }
+  return routes.defaultRoute ?? Object.keys(routes.routes)[0];
+}
+
 function getCandidates(
   routes: RoutesFile,
   providers: ProvidersFile,
@@ -63,8 +82,8 @@ function getCandidates(
   providerHint?: string,
   healthStore?: HealthStore,
 ): RouteTarget[] {
-  const defaultRouteName = routes.defaultRoute ?? Object.keys(routes.routes)[0];
-  const route = routes.routes[defaultRouteName];
+  const routeKey = resolveRouteKeyForModel(requestModel, routes);
+  const route = routes.routes[routeKey];
   if (!route) return [];
 
   let baseCandidates: RouteTarget[] = [];
@@ -78,21 +97,7 @@ function getCandidates(
     if (route.fallbacks) baseCandidates.push(...route.fallbacks);
   }
 
-  // Virtual route: mini-balanced adalah alias untuk balanced chain (gateway MiniRoutingAI / mini-routingai).
-  // Tangani semua varian: "mini-balanced", "mini-9router/mini-balanced", "mini-routingai/mini-balanced", "MiniRoutingAI/mini-balanced" (case-insensitive)
-  const normalizedModel = requestModel.split("/").pop() ?? requestModel;
-  if (normalizedModel === "mini-balanced" || normalizedModel === "mini-balanced-cloud") {
-    // Warning untuk alias legacy agar observability jelas — kanonik kini mini-routingai
-    const prefixLower = requestModel.split("/")[0]?.toLowerCase() ?? "";
-    if (prefixLower === "mini-9router") {
-      // eslint-disable-next-line no-console
-      console.warn(`[router] deprecated alias "mini-9router/${normalizedModel}" — gunakan "mini-routingai/${normalizedModel}"`);
-    } else if (prefixLower === "miniroutingai" || prefixLower === "minirouting-ai") {
-      // eslint-disable-next-line no-console
-      console.warn(`[router] alias "MiniRoutingAI/${normalizedModel}" diterima — kanonik "mini-routingai/${normalizedModel}"`);
-    }
-    return baseCandidates;
-  }
+  // Alias model → route bernama di-resolve oleh resolveRouteKeyForModel ("mini-balanced" → "balanced", "mini-free" → "free").
 
   // Explicit provider selection via model prefix atau hint
   const explicit = selectProvider(requestModel, providers.providers, providerHint);
@@ -286,8 +291,7 @@ export class Router {
 
   async routeChat(request: ChatCompletionRequest): Promise<RouteResult> {
     const providerHint = (request as any).provider as string | undefined;
-    const defaultRouteName = this.config.routes.defaultRoute ?? Object.keys(this.config.routes.routes)[0];
-    const route = this.config.routes.routes[defaultRouteName];
+    const route = this.config.routes.routes[resolveRouteKeyForModel(request.model, this.config.routes)];
     
     const candidates = getCandidates(this.config.routes, this.config.providers, request.model, providerHint, this.healthStore);
     if (candidates.length === 0) {
@@ -476,8 +480,7 @@ export class Router {
 
   async routeStream(request: ChatCompletionRequest): Promise<RouteResult> {
     const providerHint = (request as any).provider as string | undefined;
-    const defaultRouteName = this.config.routes.defaultRoute ?? Object.keys(this.config.routes.routes)[0];
-    const route = this.config.routes.routes[defaultRouteName];
+    const route = this.config.routes.routes[resolveRouteKeyForModel(request.model, this.config.routes)];
     
     const candidates = getCandidates(this.config.routes, this.config.providers, request.model, providerHint, this.healthStore);
     if (candidates.length === 0) {

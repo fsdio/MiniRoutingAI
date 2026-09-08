@@ -727,4 +727,64 @@ describe("Phase 3 — Routing + Fallback", () => {
     p1Mock.stop(true);
     p2Mock.stop(true);
   });
+
+  test("Router — model alias mini-free memilih route free, mini-balanced tetap balanced", async () => {
+    let balancedCalled = 0;
+    let freeCalled = 0;
+
+    const balancedMock = createMockServer(async (req) => {
+      balancedCalled++;
+      return new Response(JSON.stringify(mockCompletion("balanced-model")), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const freeMock = createMockServer(async (req) => {
+      freeCalled++;
+      return new Response(JSON.stringify(mockCompletion("free-model")), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    const router = new Router(
+      {
+        providers: {
+          providers: [
+            { id: "balanced-provider", baseURL: `http://localhost:${(balancedMock as any).port}/v1` },
+            { id: "free-provider", baseURL: `http://localhost:${(freeMock as any).port}/v1` },
+          ],
+        },
+        routes: {
+          routes: {
+            balanced: {
+              strategy: "cache-aware-sticky",
+              primary: { provider: "balanced-provider", model: "balanced-model" },
+              fallbacks: [],
+            },
+            free: {
+              strategy: "cache-aware-sticky",
+              primary: { provider: "free-provider", model: "free-model" },
+              fallbacks: [],
+            },
+          },
+          defaultRoute: "balanced",
+        },
+      },
+    );
+
+    const balancedRes = await router.routeChat({
+      model: "mini-balanced",
+      messages: [{ role: "user" as const, content: "hi" }],
+    } as any);
+    expect(balancedRes.provider).toBe("balanced-provider");
+    expect(balancedRes.model).toBe("balanced-model");
+
+    const freeRes = await router.routeChat({
+      model: "mini-free",
+      messages: [{ role: "user" as const, content: "hi" }],
+    } as any);
+    expect(freeRes.provider).toBe("free-provider");
+    expect(freeRes.model).toBe("free-model");
+
+    expect(balancedCalled).toBe(1);
+    expect(freeCalled).toBe(1);
+
+    balancedMock.stop(true);
+    freeMock.stop(true);
+  });
 });

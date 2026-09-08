@@ -34,6 +34,27 @@
       "healthAwareOrdering": true,
       "minHealthyCandidates": 3,
       "modelHints": ["coding", "code", "programming", "debug", "refactor"]
+    },
+    "free": {
+      "strategy": "cache-aware-sticky",
+      "warmThresholdRequests": 10,
+      "sameProviderFallback": true,
+      "primary": { "provider": "opencode", "model": "nemotron-3.5-lightning-free", "weight": 10, "tags": ["free", "fast", "reasoning"] },
+      "fallbacks": [
+        { "provider": "opencode", "model": "ling-3.0-flash-fin-free", "weight": 8, "tags": ["free", "fast"] },
+        { "provider": "opencode", "model": "mimo-v2.5-free", "weight": 8, "tags": ["free", "general"] },
+        { "provider": "opencode", "model": "nemotron-3-ultra-free", "weight": 6, "tags": ["free", "reasoning"] },
+        { "provider": "openrouter", "model": "nvidia/nemotron-3-ultra-550b-a55b:free", "weight": 7, "tags": ["free", "reasoning"] },
+        { "provider": "openrouter", "model": "minimax/minimax-m3:free", "weight": 6, "tags": ["free", "general"] },
+        { "provider": "openrouter", "model": "deepseek/deepseek-v4-flash-0731:free", "weight": 5, "tags": ["free", "coding"] }
+      ],
+      "timeoutMs": 8000,
+      "adaptiveTimeout": { "enabled": true, "tokensPerMs": 0.25, "maxMs": 90000 },
+      "retry": { "maxRetries": 0, "backoffMs": 50 },
+      "optimizers": { "rtk": true, "headroom": true, "caveman": "lite", "ponytail": "lite" },
+      "healthAwareOrdering": true,
+      "minHealthyCandidates": 2,
+      "modelHints": ["coding", "code", "programming", "debug", "refactor"]
     }
   },
   "defaultRoute": "balanced"

@@ -3,7 +3,7 @@ import { validateChatRequest, isStreamingRequest } from "./openai.ts";
 import { createTiming, computeMetrics } from "../telemetry/timing.ts";
 import { logger, formatTimestampJakarta } from "../telemetry/logger.ts";
 import { recordMetric, getMetricsSummary, getRecentMetrics } from "../telemetry/metrics.ts";
-import { Router } from "../router/router.ts";
+import { Router, resolveRouteKeyForModel } from "../router/router.ts";
 import { globalHealthStore } from "../router/health.ts";
 import { analyzeRequest } from "../router/profile.ts";
 import { runOptimizers } from "../optimizer/pipeline.ts";
@@ -271,7 +271,7 @@ export function createServer(config: ServerConfig) {
           // Profiling stage — Request Analyzer
           const rawBodyBytes = Buffer.byteLength(rawText, "utf-8");
           let profile = analyzeRequest(chatReq, rawBodyBytes);
-          let defaultRouteName = config.routes.defaultRoute ?? Object.keys(config.routes.routes)[0] ?? "balanced";
+          let defaultRouteName = resolveRouteKeyForModel(chatReq.model, config.routes);
 
           // Token accounting — originalInputTokens = estimasi SEBELUM optimizer apa pun
           const accounting: Accounting = createAccounting(profile.estimatedTokens);
