@@ -39,8 +39,9 @@
       "strategy": "cache-aware-sticky",
       "warmThresholdRequests": 10,
       "sameProviderFallback": true,
-      "primary": { "provider": "opencode", "model": "nemotron-3.5-lightning-free", "weight": 10, "tags": ["free", "fast", "reasoning"] },
+      "primary": { "provider": "openrouter", "model": "openrouter/free", "weight": 10, "tags": ["free", "auto"] },
       "fallbacks": [
+        { "provider": "opencode", "model": "nemotron-3.5-lightning-free", "weight": 10, "tags": ["free", "fast", "reasoning"] },
         { "provider": "opencode", "model": "ling-3.0-flash-fin-free", "weight": 8, "tags": ["free", "fast"] },
         { "provider": "opencode", "model": "mimo-v2.5-free", "weight": 8, "tags": ["free", "general"] },
         { "provider": "opencode", "model": "nemotron-3-ultra-free", "weight": 6, "tags": ["free", "reasoning"] },

@@ -153,15 +153,15 @@ function Show-Help {
   Write-Host '  pwsh -File scripts/manage.ps1                  # menu interaktif (hanya jika UserInteractive)' -ForegroundColor White
   Write-Host ''
   Write-Host 'Commands:' -ForegroundColor Gray
-  Write-Host '  start              Start MiniRoutingAI (background, log: logs/mini-routingai.log) - log dibersihkan dulu' -ForegroundColor White
-  Write-Host '  stop               Stop MiniRoutingAI + bersihkan orphan bun' -ForegroundColor White
-  Write-Host '  restart            Restart MiniRoutingAI (log dibersihkan)' -ForegroundColor White
-  Write-Host '  restart-all        Restart MiniRoutingAI + Headroom (kedua log dibersihkan)' -ForegroundColor White
-  Write-Host '  status             Tampilkan health, metrics, headroom cooldown, log tail' -ForegroundColor White
+  Write-Host '  start              Start MiniRoutingAI + Headroom (background, log dibersihkan)' -ForegroundColor White
+  Write-Host '  stop               Stop MiniRoutingAI + Headroom + bersihkan orphan' -ForegroundColor White
+  Write-Host '  restart            Restart MiniRoutingAI + Headroom (log dibersihkan)' -ForegroundColor White
+  Write-Host '  restart-all        Restart MiniRoutingAI + Headroom (alias restart)' -ForegroundColor White
+  Write-Host '  status             Tampilkan health router, headroom cooldown, log tail' -ForegroundColor White
   Write-Host '  logs               Tail 50 baris logs/mini-routingai.log' -ForegroundColor White
-  Write-Host '  headroom-start     Start Headroom proxy (port 8787, mode token) - log dibersihkan' -ForegroundColor White
-  Write-Host '  headroom-stop      Stop Headroom proxy + orphan' -ForegroundColor White
-  Write-Host '  headroom-restart   Restart Headroom proxy (log dibersihkan)' -ForegroundColor White
+  Write-Host '  headroom-start     (debug) Start Headroom proxy (port 8787, mode token) - log dibersihkan' -ForegroundColor White
+  Write-Host '  headroom-stop      (debug) Stop Headroom proxy + orphan' -ForegroundColor White
+  Write-Host '  headroom-restart   (debug) Restart Headroom proxy (log dibersihkan)' -ForegroundColor White
   Write-Host '  help, --help, -h   Tampilkan bantuan ini' -ForegroundColor White
   Write-Host ''
   Write-Host 'Catatan log:' -ForegroundColor Gray
@@ -437,6 +437,32 @@ function Restart-Router-And-Headroom {
   Start-Sleep -Seconds 2
   Start-Router
   Write-Host "[mini-routingai] Start Headroom lagi..." -ForegroundColor Cyan
+  Start-Headroom
+  Show-Status
+}
+
+function Start-Both {
+  Write-Host "[mini-routingai] Start router + headroom..." -ForegroundColor Cyan
+  Start-Router
+  Start-Sleep -Seconds 2
+  Start-Headroom
+}
+
+function Stop-Both {
+  Write-Host "[mini-routingai] Stop headroom + router..." -ForegroundColor Cyan
+  Stop-Headroom
+  Start-Sleep -Seconds 1
+  Stop-Router
+}
+
+function Restart-Both {
+  Write-Host "[mini-routingai] Restart router + headroom..." -ForegroundColor Cyan
+  Stop-Headroom
+  Start-Sleep -Seconds 1
+  Stop-Router
+  Start-Sleep -Seconds 2
+  Start-Router
+  Start-Sleep -Seconds 2
   Start-Headroom
   Show-Status
 }
@@ -769,14 +795,14 @@ function Stop-Headroom {
 function Show-Menu {
   Write-Host ""
   Write-Host "=== MiniRoutingAI Manager ===" -ForegroundColor Cyan
-  Write-Host "1. Start MiniRoutingAI"
-  Write-Host "2. Stop MiniRoutingAI"
-  Write-Host "3. Restart MiniRoutingAI"
+  Write-Host "1. Start MiniRoutingAI + Headroom"
+  Write-Host "2. Stop MiniRoutingAI + Headroom"
+  Write-Host "3. Restart MiniRoutingAI + Headroom"
   Write-Host "4. Status"
   Write-Host "5. Logs (tail 50)"
-  Write-Host "6. Start Headroom"
-  Write-Host "7. Stop Headroom"
-  Write-Host "8. Restart MiniRoutingAI + Headroom"
+  Write-Host "6. Start Headroom (debug)"
+  Write-Host "7. Stop Headroom (debug)"
+  Write-Host "8. Restart MiniRoutingAI + Headroom (alias)"
   Write-Host "0. Keluar"
   Write-Host ""
   Write-Host "Ketik angka atau kata (start/stop/restart/status/logs/headroom-start/headroom-stop/restart-all/help)" -ForegroundColor DarkGray
@@ -786,10 +812,10 @@ function Invoke-CommandByName {
   param([string]$Name)
   $n = $Name.Trim().ToLower()
   switch ($n) {
-    "start"            { Start-Router; return $true }
-    "stop"             { Stop-Router; return $true }
-    "restart"          { Restart-Router; return $true }
-    "restart-all"      { Restart-Router-And-Headroom; return $true }
+    "start"            { Start-Both; return $true }
+    "stop"             { Stop-Both; return $true }
+    "restart"          { Restart-Both; return $true }
+    "restart-all"      { Restart-Both; return $true }
     "status"           { Show-Status; return $true }
     "logs"             { Show-Logs; return $true }
     "headroom-start"   { Start-Headroom; return $true }
@@ -816,7 +842,7 @@ if ($Command -ne "") {
 # Jika stdin di-redirect atau tidak interaktif, jangan masuk menu infinite (hang di CI)
 $isInteractive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected -and $Host.Name -ne "ServerRemoteHost"
 if (-not $isInteractive) {
-  Write-Host "Tidak ada subcommand dan sesi tidak interaktif - gunakan: pwsh -File scripts/manage.ps1 <start|stop|restart|status|logs|headroom-start|headroom-stop|help>" -ForegroundColor Yellow
+  Write-Host "Tidak ada subcommand dan sesi tidak interaktif - gunakan: pwsh -File scripts/manage.ps1 <start|stop|restart|status|logs|headroom-start|headroom-stop|headroom-restart|restart-all|help>" -ForegroundColor Yellow
   Show-Help
   exit 1
 }
@@ -827,14 +853,14 @@ while ($true) {
   try { $choice = (Read-Host "Pilih [0-8] atau ketik perintah").Trim().ToLower() } catch { Write-Host "Input error: $_" -ForegroundColor Red; continue }
   if (-not $choice) { continue }
   switch -Regex ($choice) {
-    "^(1|start)$"                          { Start-Router }
-    "^(2|stop)$"                           { Stop-Router }
-    "^(3|restart)$"                        { Restart-Router }
+    "^(1|start)$"                          { Start-Both }
+    "^(2|stop)$"                           { Stop-Both }
+    "^(3|restart)$"                        { Restart-Both }
     "^(4|status)$"                         { Show-Status }
     "^(5|logs)$"                          { Show-Logs }
     "^(6|headroom-start)$"                { Start-Headroom }
     "^(7|headroom-stop)$"                 { Stop-Headroom }
-    "^(8|restart-all)$"                   { Restart-Router-And-Headroom }
+    "^(8|restart-all)$"                   { Restart-Both }
     "^(0|q|keluar|quit|exit)$"            { Write-Host "Keluar." -ForegroundColor Gray; exit 0 }
     "^(help|--help|-h)$"                  { Show-Help }
     default                               { Write-Host "Pilihan tidak valid: $choice - ketik 'help' untuk daftar perintah" -ForegroundColor Yellow }

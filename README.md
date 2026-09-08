@@ -23,17 +23,16 @@ Server: `http://localhost:3000`
 Gateway dirancang sebagai 1 proses lokal ringan. Untuk jalan terus di background tanpa jaga terminal:
 
 ```powershell
-# Menu interaktif (start/stop/restart/status/logs/headroom/keluar)
+# Menu interaktif (start/stop/restart/status/logs/headroom/debug/keluar)
 # Tip: gunakan pwsh jika tersedia, fallback powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1
 powershell -ExecutionPolicy Bypass -File scripts/manage.ps1
 
 # Atau subcommand non-interaktif (CI-safe, exit 1 jika subcommand salah)
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 start     # start (log: logs/mini-routingai.log, pid: .mini-routingai.pid)
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 stop      # stop
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 restart   # restart
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 restart-all # restart gateway + headroom
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 status    # status
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 start     # start router + headroom (log: logs/mini-routingai.log, pid: .mini-routingai.pid / .headroom.pid)
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 stop      # stop router + headroom
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 restart   # restart router + headroom
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 status    # status gabungan router + headroom
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 logs      # tail log
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 help      # bantuan
 
@@ -43,10 +42,12 @@ bun run stop
 bun run restart
 bun run status
 bun run logs
+bun run restart:all
+
+# Debug headroom saja (standalone)
 bun run headroom:start
 bun run headroom:stop
 bun run headroom:restart
-bun run restart:all
 
 # Lihat log live
 Get-Content logs/mini-routingai.log -Tail 50 -Wait
@@ -54,17 +55,19 @@ Get-Content logs/mini-routingai.log -Tail 50 -Wait
 
 Port default 3000 (`PORT` di `.env`). Ganti port: set `PORT` di `.env`.
 
-Headroom proxy (opsional, hanya jika `balanced` headroom:true dan mau real compress):
+Headroom proxy (opsional, debug sekadar — start/stop/restart sudah otomatis berjalan bersamaan router)
 
 ```powershell
-# Start headroom proxy (discovery portabel via $env:USERPROFILE/$env:LOCALAPPDATA/pipx, cek port 8787)
+# Debug sekar dijalankan router + headroom secara gabungan:
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 headroom-start
-# stop headroom
+# (jika perlu stop headroom saja)
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 headroom-stop
-# restart headroom
+# (jika perlu restart headroom saja)
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 headroom-restart
-# Validasi: jika path typo /script/manage.ps1 dipakai, script akan warning dan arahkan ke scripts/manage.ps1
 ```
+
+Catatan: `start`/`stop`/`restart` di manage.ps1 **selalu** mengelola kedua router dan headroom bersamaan. 
+Perintah `headroom-start/stop/restart` hanya untuk kasus debug/restart headroom stand-alone jika router mati atau perlu dipisah.
 
 ## Benchmark
 
@@ -85,7 +88,7 @@ HEADROOM_URL=http://localhost:8787 bun run benchmark
 - **RTK** — `config/routes.json: fast {rtk:false}` vs `balanced {rtk:true}` (tool_output dedup, git diff/grep, fail-open, duration <1ms)
  - **Headroom** — `config/routes.json: fast {headroom:false}` vs `balanced {headroom:true}` (context compression via `POST {HEADROOM_URL}/v1/compress`, threshold `minimumTokens:6000` + `minimumBytes:8000`, timeout 8000ms (adaptif +1.5ms/KB, cap 12000ms), `healthProbeMs:1000ms`, `cacheTtlMs:10000`, fail-open). Default `enabled:false`; `balanced` opt-in. Jalankan `headroom proxy --port 8787` sebelum benchmark real provider. Mode `token` (maksimalkan penghematan; benchmark: ±27% hemat, ~10ms setelah warm). Proxy dijalankan dengan `--mode token` oleh `scripts/manage.ps1`. Troubleshooting timeout: `powershell -File scripts/manage.ps1 status`, `Get-Content logs/headroom.log -Tail 50`, `curl http://localhost:3000/debug/headroom` & `curl http://localhost:8787/health`.
 - **Mini-Balanced** — alias virtual `mini-balanced`/`mini-balanced-cloud` → chain `balanced` (primary `ollama-cloud`, fallback `opencode-go`, `opencode`, `openrouter`...). Saat `x-opencode-session` ada, gateway meneruskannya ke `opencode-go` (Console Go); jika tidak ada, `opencode-go` diskip otomatis agar tidak `missing x-opencode-session`.
-- **Mini-Free** — alias virtual `mini-free` → chain `free` (`config/routes.json`): primary `opencode` (zen/v1 `*-free`), fallback `openrouter` varian `*:free`. Semua kandidat full-free; dipilih saat `x-opencode-session` tersedia untuk model `opencode`, selain itu `openrouter :free`.
+- **Mini-Free** — alias virtual `mini-free` → chain `free` (`config/routes.json`): primary `openrouter/free` (Auto: Free OpenRouter, tanpa butuh `x-opencode-session`), fallback `opencode` (zen/v1 `*-free`) + varian `openrouter :free`. Semua kandidat full-free.
 
 ### Invarian Config (anti-regresi, dijaga `tests/anti-regresi.test.ts`)
 
