@@ -1,7 +1,10 @@
-// src/router/health.ts — per-provider/model health + cooldown Phase 3
+// src/router/health.ts — per-provider/model health + cooldown Phase 3 (+ Wave 1: cooldown per class, success rate)
+
+import { CLASS_COOLDOWN_MS } from "./policy.ts";
 
 export interface HealthEntry {
   failures: number;
+  successes: number;
   cooldownUntil: number; // epoch ms, 0 = healthy
   lastErrorAt: number;
   lastErrorClass?: string;
@@ -16,9 +19,13 @@ export class HealthStore {
   constructor(opts?: { cooldownMs?: number; failureThreshold?: number; now?: () => number }) {
     // Threshold 1 → transient/unavailable langsung cooldown di attempt pertama, mencegah looping "Model is unavailable" menghantam model yang sama berulang kali (retry attempt #2/#3 dari OpenCode).
     this.cooldownMs = opts?.cooldownMs ?? 30_000;
+    // Jika cooldownMs eksplisit di-set, ia menimpa cooldown per-class (dipakai test & custom store)
+    this.cooldownMsExplicit = opts?.cooldownMs !== undefined;
     this.failureThreshold = opts?.failureThreshold ?? 1;
     this.now = opts?.now ?? (() => Date.now());
   }
+
+  private cooldownMsExplicit: boolean;
 
   private key(provider: string, model: string): string {
     return `${provider}:${model}`;
@@ -40,22 +47,50 @@ export class HealthStore {
   markSuccess(provider: string, model: string): void {
     const k = this.key(provider, model);
     this.store.delete(k);
+    // Track success untuk success-rate ordering (Wave 1)
+    const entry = this.successes.get(k) ?? 0;
+    this.successes.set(k, entry + 1);
   }
 
-  markFailure(provider: string, model: string, errorClass: string, opts?: { isUnavailable?: boolean }): void {
+  private successes = new Map<string, number>();
+
+  getSuccessRate(provider: string, model: string): number {
+    const succ = this.successes.get(this.key(provider, model)) ?? 0;
+    const entry = this.store.get(this.key(provider, model));
+    const fails = entry?.failures ?? 0;
+    const total = succ + fails;
+    if (total === 0) return 1; // unknown = netral
+    return succ / total;
+  }
+
+  markFailure(provider: string, model: string, errorClass: string, opts?: { isUnavailable?: boolean; retryAfterMs?: number }): void {
     const k = this.key(provider, model);
-    const entry = this.store.get(k) ?? { failures: 0, cooldownUntil: 0, lastErrorAt: 0 };
+    const entry = this.store.get(k) ?? { failures: 0, successes: 0, cooldownUntil: 0, lastErrorAt: 0 };
     entry.failures += 1;
     entry.lastErrorAt = this.now();
     entry.lastErrorClass = errorClass;
 
+    // Cooldown per class (Wave 1): 429 ≠ timeout ≠ 5xx. Retry-After dari upstream menang.
+    // Instance cooldownMs eksplisit menimpa class default (kompatibilitas test/custom store).
+    let classCooldown = !this.cooldownMsExplicit && (CLASS_COOLDOWN_MS[errorClass] !== undefined)
+      ? CLASS_COOLDOWN_MS[errorClass]
+      : this.cooldownMs;
+    if (opts?.retryAfterMs && opts.retryAfterMs > 0 && errorClass === "rate_limit") {
+      // Weekly quota (Ollama weekly limit) butuh cooldown panjang — cap 1 jam bukan 120s
+      const cap = opts.retryAfterMs > 120_000 ? 3_600_000 : 120_000;
+      classCooldown = Math.max(classCooldown, Math.min(opts.retryAfterMs, cap));
+    }
+
     if (errorClass === "credential") {
-      entry.cooldownUntil = this.now() + this.cooldownMs;
-    } else if (errorClass === "transient" || errorClass === "unknown") {
+      entry.cooldownUntil = this.now() + classCooldown;
+    } else if (errorClass === "context_overflow") {
+      // Model ini tidak sanggup payload serupa — cooldown panjang
+      entry.cooldownUntil = this.now() + classCooldown;
+    } else if (errorClass === "transient" || errorClass === "rate_limit" || errorClass === "timeout" || errorClass === "server_error" || errorClass === "unknown") {
       // Untuk "Model is unavailable"/capacity/overloaded → langsung cooldown tanpa tunggu threshold, agar retry OpenCode attempt #3 tidak menghantam model sama.
       const immediate = opts?.isUnavailable || this.failureThreshold <= 1;
       if (immediate || entry.failures >= this.failureThreshold) {
-        entry.cooldownUntil = this.now() + this.cooldownMs;
+        entry.cooldownUntil = this.now() + classCooldown;
       }
     } else if (errorClass === "deterministic") {
       // No cooldown for deterministic — request error, not provider health

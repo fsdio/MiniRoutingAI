@@ -1,48 +1,100 @@
 [
   {
-    "providerId": "opencode",
-    "model": "nemotron-3.5-lightning-free",
-    "status": 200,
-    "ok": true,
+    "providerId": "ollama-cloud",
+    "model": "nemotron-3-ultra:cloud",
+    "status": 429,
+    "ok": false,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"gen-1788626182-iwny8jtmMMBiEOLGl5rq\",\"object\":\"chat.completion\",\"created\":1788626182,\"model\":\"nemotron-3.5-lightning-free\",\"choices\":[{\"index\":0,\"finish_reason\":\"length\",\"logprobs\":null,\"message\":{\"role\":\"assistant\",\"content\":\"Here's a thinking process\",\"refusal\":null,\"reasoning\":\"Here's a th"
-  },
-  {
-    "providerId": "juan",
-    "model": "minimax-m3",
-    "status": 200,
-    "ok": true,
-    "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hi! How can I\"},\"finish_reason\":\"length\"}],\"created\":1788626184,\"id\":\"06eb780731f09afc8949d19676ef5acf\",\"model\":\"minimax-m3\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2248,\"completion_tokens\":5,\"total_tokens\":2253,\"prompt_toke"
-  },
-  {
-    "providerId": "opencode-go",
-    "model": "deepseek-v4-flash",
-    "status": 200,
-    "ok": true,
-    "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "{\"id\":\"router-cdfdf57f5021c6c1f0a86a5e62486c8d\",\"object\":\"chat.completion\",\"created\":1788626185,\"model\":\"deepseek-v4-flash\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"logprobs\":null,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\",\"reasoning_content\":\"We need respond to "
+    "msg": "you (klikrahmatsunjani) have reached your weekly usage limit, upgrade for higher limits: https://ollama.com/upgrade (ref: e35651ec-6037-4c68-9dc9-b1e0675a3014)"
   },
   {
     "providerId": "ollama-cloud",
     "model": "gemma4:31b",
-    "status": 200,
-    "ok": true,
+    "status": 429,
+    "ok": false,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"chatcmpl-126\",\"object\":\"chat.completion\",\"created\":1788626186,\"model\":\"gemma4:31b\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":14,\"completion_tokens\":5,\"total_tokens\":19}"
+    "msg": "you (klikrahmatsunjani) have reached your weekly usage limit, upgrade for higher limits: https://ollama.com/upgrade (ref: b783a36c-fb8a-4516-84c3-61a294a9ad9d)"
+  },
+  {
+    "providerId": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "status": 400,
+    "ok": false,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "Error from provider (Console Go): Request is missing x-opencode-session and cannot be routed efficiently. Please see https://opencode.ai/docs/go/#where-can-i-use-it"
+  },
+  {
+    "providerId": "opencode-go",
+    "model": "deepseek-v4-flash-vision-exp",
+    "status": 400,
+    "ok": false,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "Error from provider (Console Go): Request is missing x-opencode-session and cannot be routed efficiently. Please see https://opencode.ai/docs/go/#where-can-i-use-it"
+  },
+  {
+    "providerId": "opencode-go",
+    "model": "minimax-m3",
+    "status": 400,
+    "ok": false,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "Error from provider (Console Go): Request is missing x-opencode-session and cannot be routed efficiently. Please see https://opencode.ai/docs/go/#where-can-i-use-it"
+  },
+  {
+    "providerId": "openrouter",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "status": 0,
+    "ok": false,
+    "isUnavailable": false,
+    "msg": "AbortError: The operation was aborted."
   },
   {
     "providerId": "openrouter",
     "model": "minimax/minimax-m3:free",
+    "status": 404,
+    "ok": false,
+    "isUnavailable": true,
+    "isNotFound": false,
+    "msg": "This model is unavailable for free. The paid version is available now - use this slug instead: minimax/minimax-m3"
+  },
+  {
+    "providerId": "openrouter",
+    "model": "deepseek/deepseek-v4-flash-0731",
     "status": 200,
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "\n         \n{\"id\":\"gen-1788626187-aBBh5KolHwbE87DmLYh1\",\"object\":\"chat.completion\",\"created\":1788626187,\"model\":\"minimax/minimax-m3:free\",\"provider\":\"GMICloud\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reason\":\"length\","
+    "msg": "\n         \n{\"id\":\"gen-1788889981-eVGxSFn7KyDPfJnCi4su\",\"object\":\"chat.completion\",\"created\":1788889981,\"model\":\"deepseek/deepseek-v4-flash-0731\",\"provider\":\"CoreWeave\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reason\":"
+  },
+  {
+    "providerId": "openrouter",
+    "model": "~deepseek/deepseek-v4-flash-latest",
+    "status": 200,
+    "ok": true,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "\n         \n{\"id\":\"gen-1788889983-bnGwKYLkulgHLETS7p6a\",\"object\":\"chat.completion\",\"created\":1788889983,\"model\":\"deepseek/deepseek-v4-flash-0731\",\"provider\":\"CoreWeave\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reason\":"
+  },
+  {
+    "providerId": "nvidia",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
+    "status": 0,
+    "ok": false,
+    "isUnavailable": false,
+    "msg": "AbortError: The operation was aborted."
+  },
+  {
+    "providerId": "nvidia",
+    "model": "minimaxai/minimax-m3",
+    "status": 200,
+    "ok": true,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "{\"id\":\"chatcmpl-ed0c9dc5-afef-4719-b1fc-4176599fef94\",\"choices\":[{\"index\":0,\"message\":{\"content\":\"Hi! How can I\",\"role\":\"assistant\",\"reasoning_content\":null},\"finish_reason\":\"length\",\"logprobs\":null}],\"created\":1788889992,\"model\":\"minimaxai/minimax-m3\",\"service_tier\":null,\"system_fingerprint\":null,\""
   },
   {
     "providerId": "opencode",
@@ -55,82 +107,30 @@
   },
   {
     "providerId": "opencode",
-    "model": "muse-spark-1.2-contributor-free",
-    "status": 500,
-    "ok": false,
-    "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "Internal server error"
-  },
-  {
-    "providerId": "opencode",
     "model": "mimo-v2.5-free",
-    "status": 429,
+    "status": 400,
     "ok": false,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "Error from provider (Console): Rate limit exceeded. Please try again later."
-  },
-  {
-    "providerId": "openrouter",
-    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "status": 200,
-    "ok": true,
-    "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "\n         \n\n         \n{\"id\":\"gen-1788626192-uUWYmTVcHwjMbmlKrQu6\",\"object\":\"chat.completion\",\"created\":1788626192,\"model\":\"nvidia/nemotron-3-ultra-550b-a55b:free\",\"provider\":\"Nvidia\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_"
-  },
-  {
-    "providerId": "nvidia",
-    "model": "nvidia/nemotron-3-ultra-550b-a55b",
-    "status": 200,
-    "ok": true,
-    "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "{\"id\":\"chatcmpl-0af32184-3a03-43f1-b296-c931bb1447b2\",\"choices\":[{\"index\":0,\"message\":{\"content\":\"The user said \\\"hi\",\"role\":\"assistant\",\"reasoning_content\":\"The user said \\\"hi\"},\"finish_reason\":\"length\",\"logprobs\":null}],\"created\":1788626202,\"model\":\"nvidia/nemotron-3-ultra-550b-a55b\",\"service_tier"
+    "msg": "Error from provider (Console): OpenCode's free tier can only be used in OpenCode"
   },
   {
     "providerId": "opencode",
     "model": "nemotron-3-ultra-free",
-    "status": 0,
+    "status": 400,
     "ok": false,
     "isUnavailable": false,
-    "msg": "AbortError: The operation was aborted."
+    "isNotFound": false,
+    "msg": "Error from provider (Console): OpenCode's free tier can only be used in OpenCode"
   },
   {
-    "providerId": "opencode-go",
-    "model": "minimax-m3",
+    "providerId": "juan",
+    "model": "gemini-3.7-flash-low",
     "status": 200,
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"06eb782410ab8c5a3ed5b535b051b3c1\",\"object\":\"chat.completion\",\"created\":1788626212,\"model\":\"minimax-m3\",\"choices\":[{\"index\":0,\"finish_reason\":\"length\",\"message\":{\"role\":\"assistant\",\"content\":\"<think>The user has just</think>\\n\\n\"}}],\"usage\":{\"prompt_tokens\":177,\"completion_tokens\":5,\"total_tok"
-  },
-  {
-    "providerId": "openrouter",
-    "model": "deepseek/deepseek-v4-flash-0731",
-    "status": 200,
-    "ok": true,
-    "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "\n         \n\n         \n{\"id\":\"gen-1788626217-wIGe5eHevkHtu9Va5Krt\",\"object\":\"chat.completion\",\"created\":1788626217,\"model\":\"deepseek/deepseek-v4-flash-0731\",\"provider\":\"Fireworks\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_fini"
-  },
-  {
-    "providerId": "opencode-go",
-    "model": "deepseek-v4-flash-vision-exp",
-    "status": 200,
-    "ok": true,
-    "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "{\"id\":\"chatcmpl-RL2gw3SBzpXqR79EJLAk1Ely\",\"object\":\"chat.completion\",\"created\":1788626225,\"model\":\"deepseek-v4-flash-vision-exp\",\"choices\":[{\"index\":0,\"finish_reason\":\"length\",\"logprobs\":null,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"name\":null,\"reasoning_content\":\"We need answer user.\",\"tool_call"
-  },
-  {
-    "providerId": "ollama-cloud",
-    "model": "nemotron-3-ultra:cloud",
-    "status": 0,
-    "ok": false,
-    "isUnavailable": false,
-    "msg": "AbortError: The operation was aborted."
+    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\"},\"finish_reason\":\"stop\"}],\"created\":1788889997,\"id\":\"chatcmpl-jEugasWIGsDcg8UPuvXIOQ\",\"model\":\"gemini-3.7-flash-low\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2002,\"completion_tokens\":9,\"total"
   },
   {
     "providerId": "juan",
@@ -139,15 +139,42 @@
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"Let me consider how to\"},\"finish_reason\":\"length\"}],\"created\":1788626235,\"id\":\"c1016f0e-33ed-4267-b359-1e83c84d0c55\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2013,\"completion_tok"
+    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"Let me consider how to\"},\"finish_reason\":\"length\"}],\"created\":1788890001,\"id\":\"0808e70b-638f-4d35-b540-493c4f1f583b\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2013,\"completion_tok"
   },
   {
-    "providerId": "openrouter",
-    "model": "~deepseek/deepseek-v4-flash-latest",
+    "providerId": "juan",
+    "model": "minimax-m3",
     "status": 200,
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "\n         \n{\"id\":\"gen-1788626236-VqJpMwrjRRFMKvobHSqD\",\"object\":\"chat.completion\",\"created\":1788626236,\"model\":\"deepseek/deepseek-v4-flash-0731\",\"provider\":\"Sail Research\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reas"
+    "msg": "{\"base_resp\":{\"status_code\":0,\"status_msg\":\"\"},\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"\\u003cthink\\u003eThe user is just\\u003c/think\\u003e\\n\\n\",\"role\":\"assistant\"}}],\"created\":1788890005,\"id\":\"06ef7e93170a3722ea60e481fc7a2aac\",\"input_sensitive\":false,\"input_sensitive_typ"
+  },
+  {
+    "providerId": "juan",
+    "model": "gemini-3.8-flash-high",
+    "status": 200,
+    "ok": true,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\"},\"finish_reason\":\"stop\"}],\"created\":1788890008,\"id\":\"chatcmpl-lkugapSyCb_84-EPr5KPoAs\",\"model\":\"gemini-3.8-flash-high\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2121,\"completion_tokens\":9,\"tot"
+  },
+  {
+    "providerId": "juan",
+    "model": "nemotron-3-ultra",
+    "status": 503,
+    "ok": false,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "[openai-compatible-chat-7c249d69-6c34-491a-8d42-c7ad1a8b73c0/posiden/nemotron-3-ultra] [401]: {\"error\":{\"message\":\"upstream error (status 401)\",\"type\":\"authentication_error\",\"param\":null,\"code\":null}} (reset after 32s)"
+  },
+  {
+    "providerId": "juan",
+    "model": "deepseek-v4-flash",
+    "status": 200,
+    "ok": true,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user just said \\\"\"},\"finish_reason\":\"length\"}],\"created\":1788890011,\"id\":\"chatcmpl-1788890011212\",\"model\":\"deepseek-v4-flash\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":7658,\"completion_tokens\":5,\"tot"
   }
 ]

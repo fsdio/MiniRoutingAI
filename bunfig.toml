@@ -1,0 +1,3 @@
+# bunfig.toml — env untuk test (MINI_NO_LISTEN: import src/index.ts tidak bind port 3000)
+[test]
+preload = ["./tests/preload-env.ts"]

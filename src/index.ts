@@ -4,6 +4,57 @@ import type { ProvidersFile, RoutesFile } from "./types/index.ts";
 
 let configLoadErrors: Record<string, string> = {};
 
+function stripJsonCommentsAndTrailingComma(src: string): string {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  // Posisi koma terakhir di luar string (untuk trailing comma removal yang string-safe)
+  let lastCommaIdx = -1;
+  let trailingRemoved = 0;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    const next = src[i + 1] ?? "";
+    if (inLineComment) {
+      if (c === "\n") { inLineComment = false; out += c; }
+      continue;
+    }
+    if (inBlockComment) {
+      if (c === "*" && next === "/") { inBlockComment = false; i++; }
+      continue;
+    }
+    if (inStr) {
+      out += c;
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    // not in string/comment
+    if (c === '"') { inStr = true; out += c; continue; }
+    if (c === "/" && next === "/") { inLineComment = true; i++; continue; }
+    if (c === "/" && next === "*") { inBlockComment = true; i++; continue; }
+    if (c === ",") { lastCommaIdx = out.length; out += c; continue; }
+    if ((c === "}" || c === "]") && lastCommaIdx >= 0) {
+      // Ada koma sebelum bracket penutup, dan di antara koma & bracket hanya whitespace → trailing comma, hapus
+      const between = out.slice(lastCommaIdx + 1);
+      if (/^\s*$/.test(between)) {
+        out = out.slice(0, lastCommaIdx) + c;
+        trailingRemoved++;
+        // Cari koma sebelumnya (di luar string) — sederhana: reset; struktur nested aman karena koma sebelum bracket terakhir selalu ditemukan ulang saat berikutnya muncul
+        lastCommaIdx = -1;
+        continue;
+      }
+      lastCommaIdx = -1;
+      out += c;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
 async function loadJson<T>(path: string, fallback: T, opts?: { critical?: boolean }): Promise<T> {
   try {
     const file = Bun.file(path);
@@ -16,11 +67,12 @@ async function loadJson<T>(path: string, fallback: T, opts?: { critical?: boolea
     }
     const text = await file.text();
     try {
-      return JSON.parse(text) as T;
+      const cleaned = stripJsonCommentsAndTrailingComma(text);
+      return JSON.parse(cleaned) as T;
     } catch (parseErr: any) {
       const msg = `Invalid JSON di ${path}: ${String(parseErr?.message ?? parseErr)}`;
       configLoadErrors[path] = msg;
-      console.error(`[config] ❌ ${msg}`);
+      console.error(`[config] X ${msg}`);
       console.error(`[config] Hint: cek koma, trailing comma, atau kutip di ${path}. Jalankan: bun -e "JSON.parse(await Bun.file('${path}').text())" untuk detail`);
       if (opts?.critical) {
         console.error(`[config] CRITICAL: ${path} adalah config kritis — gateway akan exit (1). Perbaiki JSON sebelum restart.`);
@@ -43,6 +95,10 @@ export function getConfigLoadErrors(): Record<string, string> {
   return { ...configLoadErrors };
 }
 
+// Export untuk unit test (anti-regresi R2)
+export { stripJsonCommentsAndTrailingComma };
+
+// Import test memakai MINI_NO_LISTEN=1 agar tidak konflik port 3000 (anti-regresi.test.ts hanya butuh export util)
 const port = Number(process.env.PORT ?? Bun.env.PORT ?? 3000);
 
 const defaultProviders: ProvidersFile = {
@@ -58,7 +114,7 @@ const defaultProviders: ProvidersFile = {
 
 const defaultRoutes: RoutesFile = {
   routes: {
-    fast: {
+    balanced: {
       strategy: "fallback",
       primary: { provider: "upstream", model: "test-model" },
       fallbacks: [],
@@ -66,12 +122,14 @@ const defaultRoutes: RoutesFile = {
       retry: { maxRetries: 0, backoffMs: 0 },
     },
   },
-  defaultRoute: "fast",
+  defaultRoute: "balanced",
 };
 
 const providers = await loadJson<ProvidersFile>("config/providers.json", defaultProviders, { critical: true });
 const routes = await loadJson<RoutesFile>("config/routes.json", defaultRoutes, { critical: true });
 const optimization = await loadJson<any>("config/optimization.json", { optimizers: { rtk: false } });
+const prices = await loadJson<Record<string, any>>("config/prices.json", { prices: {} });
+const priceTable = (prices as any)?.prices ?? {};
 
 // Validasi provider rename: kanonik kini mini-routingai; MiniRoutingAI dan mini-9router adalah alias deprecated
 const legacyIds = providers.providers.filter((p) => ["mini-9router", "MiniRoutingAI"].includes(p.id)).map((p) => p.id);
@@ -95,4 +153,6 @@ if (process.env.OLLAMA_CLOUD_BASE_URL || (Bun.env as any).OLLAMA_CLOUD_BASE_URL)
   if (p) p.baseURL = envUrl;
 }
 
-createServer({ port, providers, routes, optimization });
+if (process.env.MINI_NO_LISTEN !== "1") {
+  createServer({ port, providers, routes, optimization, prices: priceTable });
+}

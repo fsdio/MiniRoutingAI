@@ -12,6 +12,8 @@ export function prepareOpenAIRequest(
   opts: PrepareOptions = {},
 ): Record<string, any> {
   const req: Record<string, any> = { ...(request as Record<string, any>) };
+  // Hapus internal field agar tidak terkirim ke upstream (validasi \"Unsupported parameter\")
+  if ("__forwardedHeaders" in req) delete req.__forwardedHeaders;
   const stream = opts.stream ?? request.stream ?? false;
   if (stream) {
     // Minta upstream mengirim usage di chunk terakhir (untuk capture token).

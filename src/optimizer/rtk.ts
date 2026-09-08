@@ -4,6 +4,7 @@
 
 import { compressMessages, formatRtkLog } from "./vendor/rtk/index.js";
 import type { ChatCompletionRequest } from "../types/index.ts";
+import { globalRtkMemo } from "../memory/duplicate-cache.ts";
 
 // @ts-ignore — vendor JS has no types
 import { MIN_COMPRESS_SIZE } from "./vendor/rtk/constants.js";
@@ -114,12 +115,33 @@ export function applyRtk(chatReq: ChatCompletionRequest, opts: RtkOptions): RtkR
 
   // Fail-open wrapper
   try {
+    // Wave 3 memo: ganti tool message dengan hasil kompresi tersimpan (hash konten asli),
+    // hanya untuk message yang tidak berubah sejak terakhir dikompresi.
+    const messages: any[] = (chatReq as any).messages ?? [];
+    let memoHits = 0;
+    const originals: Array<{ m: any; orig: string }> = [];
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      if (m?.role === "tool" && typeof m?.content === "string") {
+        originals.push({ m, orig: m.content });
+        const memoed = globalRtkMemo.get(m.content);
+        if (memoed !== null && memoed !== undefined) {
+          m.content = memoed;
+          memoHits++;
+        }
+      }
+    }
+
     // compressMessages mutates body in-place; kita bangun body wrapper agar sesuai signature
     // Body harus punya messages atau conversationState atau input
     const body: any = { messages: chatReq.messages };
     // Preserve other fields yang mungkin dipakai filter (tidak penting untuk kompresi tool saja)
     const stats = compressMessages(body, true);
 
+    // Simpan hasil kompresi baru ke memo (original → compressed)
+    for (const { m, orig } of originals) {
+      if (m.content !== orig) globalRtkMemo.set(orig, m.content);
+    }
     const durationMs = performance.now() - start;
 
     if (!stats || !stats.hits || stats.hits.length === 0) {

@@ -42,16 +42,16 @@ function resolveHeadroomOptions(cfg?: OptimizerConfig): HeadroomOptions {
   if (h === true) return { enabled: true, url: process.env.HEADROOM_URL ?? (Bun.env as any).HEADROOM_URL };
   return {
     enabled: (h as any).enabled ?? false,
-    minimumTokens: (h as any).minimumTokens,
-    minimumBytes: (h as any).minimumBytes,
-    timeoutMs: (h as any).timeoutMs ?? 500,
+    minimumTokens: (h as any).minimumTokens ?? 6000,
+    minimumBytes: (h as any).minimumBytes ?? 8000,
+    timeoutMs: (h as any).timeoutMs ?? 6000,
     url: (h as any).url ?? process.env.HEADROOM_URL ?? (Bun.env as any).HEADROOM_URL,
     failOpen: (h as any).failOpen ?? true,
-    maxConsecutiveFailures: (h as any).maxConsecutiveFailures,
-    cooldownMs: (h as any).cooldownMs,
-    healthProbeMs: (h as any).healthProbeMs,
-    compressUserMessages: (h as any).compressUserMessages,
-    cacheTtlMs: (h as any).cacheTtlMs,
+    maxConsecutiveFailures: (h as any).maxConsecutiveFailures ?? 3,
+    cooldownMs: (h as any).cooldownMs ?? 30_000,
+    healthProbeMs: (h as any).healthProbeMs ?? 500,
+    compressUserMessages: (h as any).compressUserMessages ?? false,
+    cacheTtlMs: (h as any).cacheTtlMs ?? 10_000,
   };
 }
 

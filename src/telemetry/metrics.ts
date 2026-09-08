@@ -77,6 +77,7 @@ export interface RequestMetric {
   ponytail?: PonytailMetric | null;
   duplicateCacheHits?: number;
   errorMemoryHits?: number;
+  accounting?: any;
   status: number;
   timestamp: number;
 }
@@ -109,6 +110,8 @@ export function getMetricsSummary() {
   const headroomFails = recentMetrics.filter((m) => m.headroom && !m.headroom.success && m.headroom.enabled && m.headroom.skipped).length;
   const headroomTimeouts = recentMetrics.filter((m) => m.headroom?.reason?.includes("timeout") || m.headroom?.reason?.includes("headroom_proxy timeout")).length;
   const headroomCooldowns = recentMetrics.filter((m) => m.headroom?.reason?.includes("headroom_cooldown")).length;
+  const headroomDurations = recentMetrics.map((m) => m.headroomDurationMs).filter((v): v is number => typeof v === "number");
+  const timeoutRate = recentMetrics.length > 0 ? headroomTimeouts / recentMetrics.length : 0;
 
   return {
     count: recentMetrics.length,
@@ -116,7 +119,7 @@ export function getMetricsSummary() {
     gatewayOverhead: computeStats(overheads),
     ttft: computeStats(ttfts),
     providerLatency: computeStats(providerLatencies),
-    headroom: { fails: headroomFails, timeouts: headroomTimeouts, cooldowns: headroomCooldowns },
+    headroom: { fails: headroomFails, timeouts: headroomTimeouts, cooldowns: headroomCooldowns, timeoutRate: Number(timeoutRate.toFixed(3)), avgDurationMs: computeStats(headroomDurations) },
     recent: recentMetrics.slice(-10),
   };
 }

@@ -93,3 +93,49 @@ export class DuplicateCache {
 }
 
 export const globalDuplicateCache = new DuplicateCache({ ttlMs: 3000 });
+
+// Wave 3: RTK memoisasi — hash konten tool output asli → hasil terkompresi.
+// Menghilangkan re-work RTK per request (empiris: rtkSavedBytes konstan 15906 = pekerjaan ulang tiap request).
+// TTL 10 menit, LRU maks 300 entri, hanya konten > 4KB yang layak dimemo.
+class RtkMemoCache {
+  private store = new Map<string, { value: string; expiresAt: number }>();
+  private ttlMs = 600_000;
+  private maxEntries = 300;
+  private minBytes = 4096;
+
+  static hash(s: string): string {
+    // FNV-1a 64-bit-ish (cukup untuk memo, bukan kripto)
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (let i = 0; i < s.length; i++) {
+      h1 ^= s.charCodeAt(i);
+      h1 = Math.imul(h1, 16777619) >>> 0;
+      h2 = (Math.imul(h2 ^ s.charCodeAt(i), 2246822519) >>> 0) + i;
+    }
+    return `${h1.toString(36)}${(h2 >>> 0).toString(36)}`;
+  }
+
+  get(original: string): string | null {
+    if (Buffer.byteLength(original, "utf-8") < this.minBytes) return null;
+    const k = RtkMemoCache.hash(original);
+    const e = this.store.get(k);
+    if (!e) return null;
+    if (Date.now() > e.expiresAt) { this.store.delete(k); return null; }
+    return e.value;
+  }
+
+  set(original: string, compressed: string): void {
+    if (Buffer.byteLength(original, "utf-8") < this.minBytes) return;
+    if (compressed === original) return;
+    const k = RtkMemoCache.hash(original);
+    if (this.store.size >= this.maxEntries) {
+      const oldest = this.store.keys().next().value;
+      if (oldest !== undefined) this.store.delete(oldest);
+    }
+    this.store.set(k, { value: compressed, expiresAt: Date.now() + this.ttlMs });
+  }
+
+  clear() { this.store.clear(); }
+  size() { return this.store.size; }
+}
+
+export const globalRtkMemo = new RtkMemoCache();

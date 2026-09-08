@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { Router } from "../src/router/router.ts";
 import { HealthStore, globalHealthStore } from "../src/router/health.ts";
-import { classifyError } from "../src/router/policy.ts";
+import { classifyError, shouldFallback } from "../src/router/policy.ts";
 import { createServer } from "../src/server/server.ts";
 import { clearMetrics } from "../src/telemetry/metrics.ts";
 
@@ -25,11 +25,16 @@ describe("Phase 3 — Routing + Fallback", () => {
     expect(classifyError(400)).toBe("deterministic");
   });
   test("classifyError — transient 500/429/408/503", () => {
-    expect(classifyError(500)).toBe("transient");
-    expect(classifyError(429)).toBe("transient");
-    expect(classifyError(408)).toBe("transient");
-    expect(classifyError(503)).toBe("transient");
-    expect(classifyError(undefined, null, "timeout")).toBe("transient");
+    expect(classifyError(500)).toBe("server_error");
+    expect(classifyError(429)).toBe("rate_limit");
+    expect(classifyError(408)).toBe("timeout");
+    expect(classifyError(503)).toBe("server_error");
+    expect(classifyError(undefined, null, "timeout")).toBe("timeout");
+    // Wave 1: subclass tetap fallback-able
+    expect(shouldFallback("server_error")).toBe(true);
+    expect(shouldFallback("rate_limit")).toBe(true);
+    expect(shouldFallback("timeout")).toBe(true);
+    expect(shouldFallback("context_overflow")).toBe(false);
   });
   test("classifyError — credential 401", () => {
     expect(classifyError(401)).toBe("credential");
@@ -604,5 +609,122 @@ describe("Phase 3 — Routing + Fallback", () => {
     const store = new HealthStore({ cooldownMs: 5000 }); // default threshold 1
     store.markFailure("p", "m", "transient");
     expect(store.isHealthy("p", "m")).toBe(false);
+  });
+
+  test("Router — cache-aware-sticky keeps same target across requests for warm cache", async () => {
+    let p1Called = 0;
+    let p2Called = 0;
+    const p1Mock = createMockServer(async (req) => {
+      p1Called++;
+      const body: any = await req.json();
+      return new Response(JSON.stringify(mockCompletion(body.model)), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const p2Mock = createMockServer(async (req) => {
+      p2Called++;
+      const body: any = await req.json();
+      return new Response(JSON.stringify(mockCompletion(body.model)), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    const router = new Router({
+      providers: {
+        providers: [
+          { id: "ollama-cloud", baseURL: `http://localhost:${(p1Mock as any).port}/v1` },
+          { id: "opencode-go", baseURL: `http://localhost:${(p2Mock as any).port}/v1` },
+        ],
+      },
+      routes: {
+        routes: {
+          balanced: {
+            strategy: "cache-aware-sticky",
+            primary: { provider: "ollama-cloud", model: "nemotron-3-ultra:cloud" },
+            fallbacks: [{ provider: "opencode-go", model: "deepseek-v4-flash" }],
+          },
+        },
+        defaultRoute: "balanced",
+      },
+    });
+
+    const sessionReq = {
+      model: "mini-balanced",
+      messages: [{ role: "user" as const, content: "hi" }],
+      __forwardedHeaders: { "x-opencode-session": "sess-123" },
+    };
+
+    // 5 consecutive requests
+    for (let i = 0; i < 5; i++) {
+      const res = await router.routeChat(sessionReq as any);
+      expect(res.provider).toBe("ollama-cloud");
+      expect(res.model).toBe("nemotron-3-ultra:cloud");
+    }
+
+    expect(p1Called).toBe(5);
+    expect(p2Called).toBe(0);
+
+    p1Mock.stop(true);
+    p2Mock.stop(true);
+  });
+
+  test("Router — cache-aware-sticky tries same provider fallbacks first before next provider", async () => {
+    let p1m1Called = 0;
+    let p1m2Called = 0;
+    let p2Called = 0;
+
+    const p1Mock = createMockServer(async (req) => {
+      const body: any = await req.json();
+      if (body.model === "m1") {
+        p1m1Called++;
+        return new Response(JSON.stringify({ error: { message: "Model is unavailable" } }), { status: 503, headers: { "Content-Type": "application/json" } });
+      }
+      p1m2Called++;
+      return new Response(JSON.stringify(mockCompletion(body.model)), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    const p2Mock = createMockServer(async (req) => {
+      p2Called++;
+      const body: any = await req.json();
+      return new Response(JSON.stringify(mockCompletion(body.model)), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    const healthStore = new HealthStore({ cooldownMs: 10000, failureThreshold: 1 });
+    const router = new Router(
+      {
+        providers: {
+          providers: [
+            { id: "ollama-cloud", baseURL: `http://localhost:${(p1Mock as any).port}/v1` },
+            { id: "opencode-go", baseURL: `http://localhost:${(p2Mock as any).port}/v1` },
+          ],
+        },
+        routes: {
+          routes: {
+            balanced: {
+              strategy: "cache-aware-sticky",
+              sameProviderFallback: true,
+              primary: { provider: "ollama-cloud", model: "m1" },
+              fallbacks: [
+                { provider: "ollama-cloud", model: "m2" },
+                { provider: "opencode-go", model: "m3" },
+              ],
+            },
+          },
+          defaultRoute: "balanced",
+        },
+      },
+      { healthStore },
+    );
+
+    const res = await router.routeChat({
+      model: "mini-balanced",
+      messages: [{ role: "user" as const, content: "hi" }],
+      __forwardedHeaders: { "x-opencode-session": "sess-sticky-fallback" },
+    } as any);
+
+    expect(res.provider).toBe("ollama-cloud");
+    expect(res.model).toBe("m2");
+    expect(p1m1Called).toBe(1);
+    expect(p1m2Called).toBe(1);
+    expect(p2Called).toBe(0);
+
+    p1Mock.stop(true);
+    p2Mock.stop(true);
   });
 });

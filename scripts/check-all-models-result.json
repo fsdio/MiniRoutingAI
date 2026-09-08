@@ -2,29 +2,29 @@
   {
     "pId": "opencode-go",
     "model": "deepseek-v4-flash",
-    "status": 200,
-    "ok": true,
+    "status": 400,
+    "ok": false,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"router-172875b59bea4cbb539f64146cfe4e9b\",\"object\":\"chat.completion\",\"created\":1788625903,\"model\":\"deepseek-v4-flash\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"logprobs\":null,\"message\":{\"role\":\"assistant\",\"content\":\"Hi! How can I help you today?\",\"reasoning_content\":\"We need answer. Need b"
+    "msg": "Error from provider (Console Go): Request is missing x-opencode-session and cannot be routed efficiently. Please see https://opencode.ai/docs/go/#where-can-i-use-it"
   },
   {
     "pId": "opencode-go",
     "model": "deepseek-v4-flash-vision-exp",
-    "status": 200,
-    "ok": true,
+    "status": 400,
+    "ok": false,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"chatcmpl-R7ErDpCLtU22yOxY6GymlzD0\",\"object\":\"chat.completion\",\"created\":1788625905,\"model\":\"deepseek-v4-flash-vision-exp\",\"choices\":[{\"index\":0,\"finish_reason\":\"length\",\"logprobs\":null,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"name\":null,\"reasoning_content\":\"We need answer hi.\",\"tool_calls\""
+    "msg": "Error from provider (Console Go): Request is missing x-opencode-session and cannot be routed efficiently. Please see https://opencode.ai/docs/go/#where-can-i-use-it"
   },
   {
     "pId": "opencode-go",
     "model": "minimax-m3",
-    "status": 200,
-    "ok": true,
+    "status": 400,
+    "ok": false,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"06eb76f2c7541860c04a66586fb849a9\",\"object\":\"chat.completion\",\"created\":1788625906,\"model\":\"minimax-m3\",\"choices\":[{\"index\":0,\"finish_reason\":\"length\",\"message\":{\"role\":\"assistant\",\"content\":\"<think>The user is greeting</think>\\n\\n\"}}],\"usage\":{\"prompt_tokens\":177,\"completion_tokens\":5,\"total_"
+    "msg": "Error from provider (Console Go): Request is missing x-opencode-session and cannot be routed efficiently. Please see https://opencode.ai/docs/go/#where-can-i-use-it"
   },
   {
     "pId": "openrouter",
@@ -33,7 +33,7 @@
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "\n         \n{\"id\":\"gen-1788625910-PBGOUOv3Cfba3wfCPsHh\",\"object\":\"chat.completion\",\"created\":1788625910,\"model\":\"deepseek/deepseek-v4-flash-0731\",\"provider\":\"StreamLake\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reason\""
+    "msg": "\n         \n{\"id\":\"gen-1788889885-K9PO6dU46tT8DgK5d2aU\",\"object\":\"chat.completion\",\"created\":1788889885,\"model\":\"deepseek/deepseek-v4-flash-0731\",\"provider\":\"StreamLake\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reason\""
   },
   {
     "pId": "openrouter",
@@ -42,68 +42,59 @@
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "\n         \n{\"id\":\"gen-1788625911-z6NsbWA1DBq5IUJ6AKrK\",\"object\":\"chat.completion\",\"created\":1788625911,\"model\":\"deepseek/deepseek-v4-flash-0731\",\"provider\":\"Sail Research\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reas"
+    "msg": "\n         \n{\"id\":\"gen-1788889886-pQHQbYBrb4g4ChComyc5\",\"object\":\"chat.completion\",\"created\":1788889886,\"model\":\"deepseek/deepseek-v4-flash-0731\",\"provider\":\"Baidu\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reason\":\"len"
   },
   {
     "pId": "openrouter",
     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "status": 200,
-    "ok": true,
+    "status": 0,
+    "ok": false,
     "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "\n         \n\n         \n\n         \n{\"id\":\"gen-1788625913-5i30S4S96KOOk8ldQTRj\",\"object\":\"chat.completion\",\"created\":1788625913,\"model\":\"nvidia/nemotron-3-ultra-550b-a55b:free\",\"provider\":\"Nvidia\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"lengt"
+    "msg": "AbortError: The operation was aborted."
   },
   {
     "pId": "openrouter",
     "model": "minimax/minimax-m3:free",
-    "status": 200,
-    "ok": true,
-    "isUnavailable": false,
+    "status": 404,
+    "ok": false,
+    "isUnavailable": true,
     "isNotFound": false,
-    "msg": "\n         \n{\"id\":\"gen-1788625922-05RImjJMR7x4DDMws3xH\",\"object\":\"chat.completion\",\"created\":1788625922,\"model\":\"minimax/minimax-m3:free\",\"provider\":\"GMICloud\",\"system_fingerprint\":null,\"service_tier\":null,\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reason\":\"length\","
+    "msg": "This model is unavailable for free. The paid version is available now - use this slug instead: minimax/minimax-m3"
   },
   {
     "pId": "nvidia",
     "model": "nvidia/nemotron-3-ultra-550b-a55b",
-    "status": 200,
-    "ok": true,
+    "status": 0,
+    "ok": false,
     "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "{\"id\":\"chatcmpl-250bd5f1-3951-40b3-8611-564ebef065a2\",\"choices\":[{\"index\":0,\"message\":{\"content\":\"The user said \\\"hi\",\"role\":\"assistant\",\"reasoning_content\":\"The user said \\\"hi\"},\"finish_reason\":\"length\",\"logprobs\":null}],\"created\":1788625930,\"model\":\"nvidia/nemotron-3-ultra-550b-a55b\",\"service_tier"
+    "msg": "AbortError: The operation was aborted."
   },
   {
     "pId": "nvidia",
     "model": "minimaxai/minimax-m3",
-    "status": 0,
-    "ok": false,
-    "isUnavailable": false,
-    "msg": "AbortError: The operation was aborted."
-  },
-  {
-    "pId": "ollama-cloud",
-    "model": "nemotron-3-ultra:cloud",
-    "status": 0,
-    "ok": false,
-    "isUnavailable": false,
-    "msg": "AbortError: The operation was aborted."
-  },
-  {
-    "pId": "ollama-cloud",
-    "model": "gemma4:31b",
     "status": 200,
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"chatcmpl-223\",\"object\":\"chat.completion\",\"created\":1788625953,\"model\":\"gemma4:31b\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":14,\"completion_tokens\":5,\"total_tokens\":19}"
+    "msg": "{\"id\":\"chatcmpl-d2132e19-96ad-4726-9571-136efdafd225\",\"choices\":[{\"index\":0,\"message\":{\"content\":\"Hi there! How can\",\"role\":\"assistant\",\"reasoning_content\":null},\"finish_reason\":\"length\",\"logprobs\":null}],\"created\":1788889910,\"model\":\"minimaxai/minimax-m3\",\"service_tier\":null,\"system_fingerprint\":nu"
   },
   {
-    "pId": "opencode",
-    "model": "deepseek-v4-flash-free",
-    "status": 400,
+    "pId": "ollama-cloud",
+    "model": "nemotron-3-ultra:cloud",
+    "status": 429,
     "ok": false,
-    "isUnavailable": true,
+    "isUnavailable": false,
     "isNotFound": false,
-    "msg": "Error from provider (Console): Upstream request failed: Model is unavailable."
+    "msg": "you (klikrahmatsunjani) have reached your weekly usage limit, upgrade for higher limits: https://ollama.com/upgrade (ref: e60c88cd-5f6a-4bda-b519-78b8eb3a85d8)"
+  },
+  {
+    "pId": "ollama-cloud",
+    "model": "gemma4:31b",
+    "status": 429,
+    "ok": false,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "you (klikrahmatsunjani) have reached your weekly usage limit, upgrade for higher limits: https://ollama.com/upgrade (ref: 4c4cdcdb-857e-4aa5-9b4b-c72cdf1ddb74)"
   },
   {
     "pId": "opencode",
@@ -116,65 +107,21 @@
   },
   {
     "pId": "opencode",
-    "model": "muse-spark-1.2-contributor-free",
-    "status": 500,
-    "ok": false,
-    "isUnavailable": false,
-    "isNotFound": false,
-    "msg": "Internal server error"
-  },
-  {
-    "pId": "opencode",
     "model": "mimo-v2.5-free",
-    "status": 429,
+    "status": 400,
     "ok": false,
-    "isUnavailable": true,
-    "isNotFound": false,
-    "msg": "Error from provider (Console): Rate limit exceeded. Please try again later."
-  },
-  {
-    "pId": "opencode",
-    "model": "ling-3.0-flash-fin-free",
-    "status": 200,
-    "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"gen-1788625957-obxbj7giGNN6f2R97FNv\",\"object\":\"chat.completion\",\"created\":1788625957,\"model\":\"ling-3.0-flash-fin-free\",\"choices\":[{\"index\":0,\"finish_reason\":\"length\",\"logprobs\":null,\"message\":{\"role\":\"assistant\",\"content\":null,\"refusal\":null,\"reasoning\":\"The user has sent a\",\"reasoning_detail"
+    "msg": "Error from provider (Console): OpenCode's free tier can only be used in OpenCode"
   },
   {
     "pId": "opencode",
     "model": "nemotron-3-ultra-free",
-    "status": 0,
+    "status": 400,
     "ok": false,
     "isUnavailable": false,
-    "msg": "AbortError: The operation was aborted."
-  },
-  {
-    "pId": "opencode",
-    "model": "nemotron-3.5-lightning-free",
-    "status": 200,
-    "ok": true,
-    "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"id\":\"gen-1788625969-l6aLLf40QGPkAAjhAA6u\",\"object\":\"chat.completion\",\"created\":1788625969,\"model\":\"nemotron-3.5-lightning-free\",\"choices\":[{\"index\":0,\"finish_reason\":\"length\",\"logprobs\":null,\"message\":{\"role\":\"assistant\",\"content\":\"Here's a thinking process\",\"refusal\":null,\"reasoning\":\"Here's a th"
-  },
-  {
-    "pId": "juan",
-    "model": "laguna-xs-2.1",
-    "status": 503,
-    "ok": false,
-    "isUnavailable": true,
-    "isNotFound": false,
-    "msg": "No available channel for model laguna-xs-2.1 under group regular (distributor) (request id: 202609051632509924110598268d9d62f2rTBxI)"
-  },
-  {
-    "pId": "juan",
-    "model": "deepseek-v4-flash",
-    "status": 503,
-    "ok": false,
-    "isUnavailable": true,
-    "isNotFound": false,
-    "msg": "No available channel for model deepseek-v4-flash under group regular (distributor) (request id: 202609051632515294605758268d9d61U4lp3vT)"
+    "msg": "Error from provider (Console): OpenCode's free tier can only be used in OpenCode"
   },
   {
     "pId": "juan",
@@ -191,7 +138,7 @@
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"Let me consider how to\"},\"finish_reason\":\"length\"}],\"created\":1788625983,\"id\":\"9ac27198-a176-4591-a0c2-a13cd2c9ffac\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2013,\"completion_tok"
+    "msg": "{\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"\",\"reasoning_content\":\"Let me consider how to\",\"role\":\"assistant\"}}],\"created\":1788889929,\"id\":\"20260909015207ed5941655a2b4773\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion\",\"request_id\":\"20260909015207ed5941655a2b4773\",\"usag"
   },
   {
     "pId": "juan",
@@ -200,6 +147,33 @@
     "ok": true,
     "isUnavailable": false,
     "isNotFound": false,
-    "msg": "{\"choices\":[{\"index\":0,\"logprobs\":null,\"finish_reason\":\"length\",\"native_finish_reason\":\"length\",\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I\",\"refusal\":null,\"reasoning\":null}}],\"created\":1788625990,\"id\":\"gen-1788625990-fwgZVMgw26hVDEMCzRFq\",\"model\":\"minimax-m3\",\"object\":\"chat.completion"
+    "msg": "{\"base_resp\":{\"status_code\":0,\"status_msg\":\"\"},\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"\\u003cthink\\u003eThe user just said\\u003c/think\\u003e\\n\\n\",\"role\":\"assistant\"}}],\"created\":1788889932,\"id\":\"06ef7e4ad6a498171b878df3bdd3be76\",\"input_sensitive\":false,\"input_sensitive_t"
+  },
+  {
+    "pId": "juan",
+    "model": "gemini-3.8-flash-high",
+    "status": 200,
+    "ok": true,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\"},\"finish_reason\":\"stop\"}],\"created\":1788889937,\"id\":\"chatcmpl-TkugasjkLPK3qfkP3smZsAM\",\"model\":\"gemini-3.8-flash-high\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2148,\"completion_tokens\":9,\"tot"
+  },
+  {
+    "pId": "juan",
+    "model": "gemini-3.7-flash-low",
+    "status": 200,
+    "ok": true,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\"},\"finish_reason\":\"stop\"}],\"created\":1788889938,\"id\":\"chatcmpl-UUugaq6bMtWtg8UP_JSTuAE\",\"model\":\"gemini-3.7-flash-low\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2002,\"completion_tokens\":9,\"tota"
+  },
+  {
+    "pId": "juan",
+    "model": "deepseek-v4-flash",
+    "status": 200,
+    "ok": true,
+    "isUnavailable": false,
+    "isNotFound": false,
+    "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user just said \\\"\"},\"finish_reason\":\"length\"}],\"created\":1788889942,\"id\":\"chatcmpl-1788889942033\",\"model\":\"deepseek-v4-flash\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":7658,\"completion_tokens\":5,\"tot"
   }
 ]

@@ -5,12 +5,20 @@ import {
   openaiToOpenAIResponsesRequest,
 } from "../translator/request/openai-responses.js";
 
-const DEFAULT_TIMEOUT_MS = 3000;
+const DEFAULT_TIMEOUT_MS = 6000;
+const MAX_EFFECTIVE_TIMEOUT_MS = 8000;
 
 function normalizeTimeout(value) {
-  return typeof value === "number" && Number.isFinite(value) && value > 0
-    ? value
-    : DEFAULT_TIMEOUT_MS;
+  const base = typeof value === "number" && Number.isFinite(value) && value > 0 ? value : DEFAULT_TIMEOUT_MS;
+  return Math.min(base, MAX_EFFECTIVE_TIMEOUT_MS);
+}
+
+function resolveEffectiveTimeout(baseMs, messages) {
+  try {
+    const bytes = new TextEncoder().encode(JSON.stringify(messages) || "").length;
+    const extra = Math.ceil(bytes / 1024) * 1;
+    return Math.min(MAX_EFFECTIVE_TIMEOUT_MS, baseMs + extra);
+  } catch { return baseMs; }
 }
 
 function jsonBytes(value) {
@@ -214,6 +222,9 @@ function applyKiroHeadroomMessages(projection, compressedMessages, diagnostics) 
 
 // POST messages to Headroom /v1/compress; returns compressed messages + stats or null.
 async function callCompress(url, messages, model, timeoutMs, compressUserMessages, diagnostics) {
+  const effectiveTimeoutMs = resolveEffectiveTimeout(timeoutMs, messages);
+  diagnostics.requestedTimeoutMs = timeoutMs;
+  diagnostics.effectiveTimeoutMs = effectiveTimeoutMs;
   const endpoint = buildCompressEndpoint(url);
   diagnostics.endpoint = maskEndpoint(endpoint);
   const payload = { messages, model };
@@ -224,10 +235,15 @@ async function callCompress(url, messages, model, timeoutMs, compressUserMessage
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(effectiveTimeoutMs),
     });
   } catch (error) {
-    setDiagnostic(diagnostics, `request failed: ${describeFetchError(error)}`);
+    const name = String(error?.name ?? "");
+    const msg = String(error?.message ?? "").toLowerCase();
+    const isTimeout = name.includes("Timeout") || name.includes("AbortError") || msg.includes("timed out") || msg.includes("timeout") || msg.includes("aborted");
+    if (isTimeout) diagnostics.timedOut = true;
+    const base = describeFetchError(error);
+    setDiagnostic(diagnostics, isTimeout ? `headroom_proxy timeout ${effectiveTimeoutMs}ms (base ${timeoutMs}ms) @ ${maskEndpoint(endpoint)}: ${base.slice(0,120)}` : `request failed: ${base}`);
     return null;
   }
   if (!res.ok) {

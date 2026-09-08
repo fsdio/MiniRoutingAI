@@ -38,13 +38,17 @@ export interface HeadroomResult {
   endpoint?: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 500;
-const DEFAULT_MIN_TOKENS = 10000;
+const DEFAULT_TIMEOUT_MS = 8000;
+const DEFAULT_MIN_TOKENS = 6000;
 const DEFAULT_MAX_CONSECUTIVE_FAILURES = 3;
 const DEFAULT_COOLDOWN_MS = 30_000;
-const DEFAULT_HEALTH_PROBE_MS = 200;
-const DEFAULT_CACHE_TTL_MS = 3_000;
-const HEALTH_CACHE_MS = 5_000;
+const DEFAULT_HEALTH_PROBE_MS = 1000;
+const DEFAULT_CACHE_TTL_MS = 10_000;
+const HEALTH_CACHE_MS = 3_000;
+const MAX_EFFECTIVE_TIMEOUT_MS = 12000;
+const ADAPTIVE_TIMEOUT_PER_KB_MS = 1.5; // tambah 1.5ms per KB payload, cap MAX_EFFECTIVE_TIMEOUT_MS (untuk 300k tokens ~1.2MB -> +~1800ms)
+// R4: payload >4MB → skip headroom (Python compress lambat di payload ekstrem, RTK tetap jalan)
+const MAX_HEADROOM_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
 // Circuit breaker state — in-memory, reset on success
 let consecutiveFailures = 0;
@@ -54,6 +58,11 @@ let lastHealthOk = true;
 let lastFailureReason = "";
 let lastHealthUrl = "";
 let lastProbeTimedOut = false;
+let lastConnectionDown = false;
+
+// R3: cooldown singkat saat proxy definitif-down (connection refused) — auto-retry cepat,
+// jangan biarkan tiap request bayar 8-12s callCompress timeout
+const DEFAULT_CONNECTION_DOWN_COOLDOWN_MS = 5_000;
 
 // Result cache — key: hash(model + url + compressUserMessages + messages JSON)
 interface CachedCompression {
@@ -82,8 +91,17 @@ function simpleHash(value: string): number {
 }
 
 // Export untuk test & observabilitas
+// Konstanta default — diexport untuk test sinkronisasi config (R1 anti-drift)
+export const HEADROOM_DEFAULTS = Object.freeze({
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_HEALTH_PROBE_MS,
+  MAX_EFFECTIVE_TIMEOUT_MS,
+  DEFAULT_CONNECTION_DOWN_COOLDOWN_MS,
+  MAX_HEADROOM_PAYLOAD_BYTES,
+});
+
 export function getHeadroomHealth() {
-  return { consecutiveFailures, cooldownUntil, lastHealthOk, lastFailureReason, cooldownRemainingMs: Math.max(0, cooldownUntil - Date.now()) };
+  return { consecutiveFailures, cooldownUntil, lastHealthOk, lastFailureReason, cooldownRemainingMs: Math.max(0, cooldownUntil - Date.now()), lastConnectionDown };
 }
 export function resetHeadroomHealth() {
   consecutiveFailures = 0;
@@ -93,6 +111,7 @@ export function resetHeadroomHealth() {
   lastHealthCheck = 0;
   lastHealthUrl = "";
   lastProbeTimedOut = false;
+  lastConnectionDown = false;
   compressionCache.clear();
 }
 export function clearHeadroomCache() {
@@ -104,31 +123,62 @@ function getCacheKey(model: string, url: string, compressUserMessages: boolean, 
 function isInCooldown(): boolean {
   return Date.now() < cooldownUntil;
 }
-async function probeHeadroomHealth(url: string, probeTimeoutMs: number): Promise<{ ok: boolean; timedOut: boolean }> {
+async function probeHeadroomHealth(url: string, probeTimeoutMs: number): Promise<{ ok: boolean; timedOut: boolean; connectionDown?: boolean }> {
   const now = Date.now();
   if (url === lastHealthUrl && now - lastHealthCheck < HEALTH_CACHE_MS) return { ok: lastHealthOk, timedOut: lastProbeTimedOut };
   lastHealthCheck = now;
   lastHealthUrl = url;
   lastProbeTimedOut = false;
-  try {
-    const endpoint = url.replace(/\/$/, "") + "/health";
-    const res = await fetch(endpoint, { method: "GET", signal: AbortSignal.timeout(probeTimeoutMs) });
-    // 404/405 pada mock test dianggap healthy (mock hanya implement /v1/compress)
-    if (res.status === 404 || res.status === 405) {
-      lastHealthOk = true;
-      return { ok: true, timedOut: false };
+  // Coba beberapa endpoint/health URL untuk robustness (headroom punya /health, /livez, /readyz)
+  const candidates = [
+    url.replace(/\/$/, "") + "/health",
+    url.replace(/\/$/, "") + "/livez",
+    url.replace("localhost", "127.0.0.1").replace(/\/$/, "") + "/health",
+  ];
+  for (const endpoint of candidates) {
+    try {
+      const res = await fetch(endpoint, { method: "GET", signal: AbortSignal.timeout(probeTimeoutMs) });
+      // 404/405 pada mock test dianggap healthy (mock hanya implement /v1/compress)
+      if (res.status === 404 || res.status === 405) {
+        lastHealthOk = true;
+        lastConnectionDown = false;
+        return { ok: true, timedOut: false };
+      }
+      lastHealthOk = res.ok;
+      lastConnectionDown = false;
+      if (!res.ok) lastFailureReason = `health probe HTTP ${res.status}`;
+      else lastFailureReason = "";
+      return { ok: lastHealthOk, timedOut: false };
+    } catch (e: any) {
+      const name = String(e?.name ?? "");
+      const msg = String(e?.message ?? "").toLowerCase();
+      const cause = String((e as any)?.cause ?? "").toLowerCase();
+      const isTimeout = name.includes("Timeout") || name.includes("AbortError") || msg.includes("timed out") || msg.includes("aborted") || msg.includes("timeout");
+      // Connection down: proxy tidak jalan (refused/reset/unreachable) — berbeda dari busy-timeout
+      const isConnDown = cause.includes("econnrefused") || cause.includes("econnreset") || cause.includes("enotfound") || cause.includes("ehostunreach") ||
+        msg.includes("unable to connect") || msg.includes("connection refused") || msg.includes("connection failed") || msg.includes("fetch failed");
+      // Jika timeout, anggap inconclusive langsung tanpa coba endpoint lain
+      if (isTimeout) {
+        lastHealthOk = false;
+        lastProbeTimedOut = true;
+        lastConnectionDown = false;
+        lastFailureReason = "health probe timeout";
+        return { ok: false, timedOut: true };
+      }
+      // Jika bukan timeout dan masih ada kandidat, coba endpoint berikutnya (mis. Unable to connect -> coba 127.0.0.1)
+      const isLast = endpoint === candidates[candidates.length - 1];
+      if (!isLast) continue;
+      // Semua kandidat gagal — proxy down definitif -> cooldown singkat agar request berikutnya tidak bayar +8-12s
+      lastHealthOk = false;
+      lastProbeTimedOut = false;
+      lastConnectionDown = isConnDown;
+      const rawMsg = String(e?.message ?? e).slice(0, 80);
+      const shortMsg = isConnDown ? "proxy not running" : rawMsg;
+      lastFailureReason = `headroom skip: ${shortMsg} (cooldown ${DEFAULT_CONNECTION_DOWN_COOLDOWN_MS / 1000}s)`;
+      return { ok: false, timedOut: false, connectionDown: isConnDown };
     }
-    lastHealthOk = res.ok;
-    if (!res.ok) lastFailureReason = `health probe HTTP ${res.status}`;
-    return { ok: lastHealthOk, timedOut: false };
-  } catch (e: any) {
-    // Timeout dekat "inconclusive" — proxy hidup tapi sibuk; bukan definitive-down.
-    const isTimeout = String(e?.name ?? "").includes("Timeout") || String(e?.message ?? "").toLowerCase().includes("timed out");
-    lastHealthOk = false;
-    lastProbeTimedOut = isTimeout;
-    lastFailureReason = isTimeout ? "health probe timeout" : `health probe failed: ${String(e?.message ?? e).slice(0, 80)}`;
-    return { ok: false, timedOut: isTimeout };
   }
+  return { ok: lastHealthOk, timedOut: lastProbeTimedOut };
 }
 
 function jsonBytes(value: unknown): number {
@@ -172,7 +222,18 @@ function maskEndpoint(endpoint: string): string {
   } catch { return String(endpoint).replace(/\/\/[^/@\s]+@/, "//").replace(/[?#].*$/, ""); }
 }
 
+function resolveEffectiveTimeout(baseMs: number, messages: any[]): number {
+  try {
+    const bytes = Buffer.byteLength(JSON.stringify(messages), "utf-8");
+    const extra = Math.ceil(bytes / 1024) * ADAPTIVE_TIMEOUT_PER_KB_MS;
+    return Math.min(MAX_EFFECTIVE_TIMEOUT_MS, Math.max(baseMs, baseMs + extra));
+  } catch { return baseMs; }
+}
+
 async function callCompress(url: string, messages: any[], model: string, timeoutMs: number, diagnostics: any, compressUserMessages = false) {
+  const effectiveTimeoutMs = resolveEffectiveTimeout(timeoutMs, messages);
+  diagnostics.requestedTimeoutMs = timeoutMs;
+  diagnostics.effectiveTimeoutMs = effectiveTimeoutMs;
   const endpoint = buildCompressEndpoint(url);
   diagnostics.endpoint = maskEndpoint(endpoint);
   const payload: any = { messages, model };
@@ -185,12 +246,16 @@ async function callCompress(url: string, messages: any[], model: string, timeout
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(effectiveTimeoutMs),
     });
   } catch (e: any) {
-    const isTimeout = String(e?.name ?? "").includes("Timeout") || String(e?.message ?? "").toLowerCase().includes("timed out");
+    const name = String(e?.name ?? "");
+    const msg = String(e?.message ?? e).toLowerCase();
+    const isTimeout = name.includes("Timeout") || name.includes("AbortError") || msg.includes("timed out") || msg.includes("aborted") || msg.includes("timeout");
+    diagnostics.timedOut = isTimeout;
+    diagnostics.cause = String(e?.cause ?? "").slice(0, 120);
     diagnostics.reason = isTimeout
-      ? `headroom_proxy timeout ${timeoutMs}ms @ ${maskEndpoint(endpoint)}: ${String(e?.message ?? e).slice(0, 120)}`
+      ? `headroom_proxy timeout ${effectiveTimeoutMs}ms (base ${timeoutMs}ms) @ ${maskEndpoint(endpoint)}: ${String(e?.message ?? e).slice(0, 120)}`
       : `request failed: ${String(e?.message ?? e).slice(0, 200)}`;
     return null;
   }
@@ -223,6 +288,10 @@ export async function applyHeadroom(
 
   const minimumTokens = opts.minimumTokens ?? DEFAULT_MIN_TOKENS;
   const minimumBytes = opts.minimumBytes;
+  // R4: Payload ekstrem → skip headroom (kompresi Python lambat, timeout pasti; RTK tetap jalan)
+  if (profile.bodyBytes > MAX_HEADROOM_PAYLOAD_BYTES) {
+    return { enabled: true, skipped: true, reason: "payload_too_large_for_headroom", inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages };
+  }
   // Threshold check: skip small context. Kedua syarat diuji mandiri (AND) —
   // minimumBytes membatasi payload sangat kecil, minimumTokens membatasi konteks kecil.
   if (minimumBytes !== undefined && profile.bodyBytes < minimumBytes) {
@@ -269,16 +338,25 @@ export async function applyHeadroom(
       compressionMode: "cached", endpoint: url,
     };
   }
-  // Health probe cepat (cached 5s) sebelum fetch berat — hindari buang 800ms jika proxy down.
+  // Health probe cepat (cached 3s) sebelum fetch berat — hindari buang 800ms jika proxy down.
   // Timeout dianggap inconclusive (busy proxy) → fail-open ke kompresi; hanya definitive-down yang skip + hitung breaker.
   if (healthProbeMs > 0) {
     const probe = await probeHeadroomHealth(url, healthProbeMs);
+    if (!probe.ok && probe.connectionDown) {
+      // R3: Proxy definitif-down (connection refused) → cooldown singkat 5s agar request berikutnya
+      // tidak bayar +8-12s callCompress timeout. Auto-retry tiap 5s tanpa restart gateway.
+      cooldownUntil = Date.now() + DEFAULT_CONNECTION_DOWN_COOLDOWN_MS;
+      return { enabled: true, skipped: true, reason: lastFailureReason, inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages, endpoint: url };
+    }
     if (!probe.ok && !probe.timedOut) {
-      // Definitive down (HTTP non-ok / koneksi ditolak) → skip + ikut hitung breaker → cooldown cepat
+      // Definitive down (HTTP non-ok) → skip + ikut hitung breaker → cooldown penuh
       consecutiveFailures++;
-      lastFailureReason = `headroom_unhealthy: ${lastFailureReason}`;
+      // Hindari double prefix headroom_unhealthy
+      if (!lastFailureReason.startsWith("headroom_unhealthy:")) {
+        lastFailureReason = `headroom_unhealthy: ${lastFailureReason}`;
+      }
       if (consecutiveFailures >= maxFailures) cooldownUntil = Date.now() + cooldownMs;
-      return { enabled: true, skipped: true, reason: `headroom_unhealthy: ${lastFailureReason}`, inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages, endpoint: url };
+      return { enabled: true, skipped: true, reason: lastFailureReason, inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages, endpoint: url };
     }
     // probe.timedOut → fall-through ke kompresi (fail-open), tidak hitung breaker
   }

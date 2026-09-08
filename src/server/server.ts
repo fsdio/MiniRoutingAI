@@ -16,6 +16,7 @@ import { classifyError } from "../router/policy.ts";
 import { normalizeChatResponse } from "../translator/request.ts";
 import { createOpenAIStreamTranslator, type StreamUsage } from "../translator/stream.ts";
 import { recordRequestLog, readUsageSummary } from "../telemetry/persistence.ts";
+import { createAccounting, applyOptimizerSavings, applyActualUsage, recordFallbackAttempt, finalizeAccounting, accountToLogFields, type Accounting } from "../telemetry/accounting.ts";
 import type { ProvidersFile, RoutesFile } from "../types/index.ts";
 
 const startTime = Date.now();
@@ -26,6 +27,7 @@ export interface ServerConfig {
   providers: ProvidersFile;
   routes: RoutesFile;
   optimization?: any;
+  prices?: Record<string, any>;
 }
 
 function generateRequestId(): string {
@@ -40,6 +42,40 @@ function generateRequestId(): string {
 
 function getRouter(config: ServerConfig): Router {
   return new Router({ providers: config.providers, routes: config.routes }, { healthStore: globalHealthStore });
+}
+
+// Wave 3: estimasi cepat bytes tanpa JSON.stringify penuh (1MB+ body mahal di-stringify 3x)
+function quickEstimateTokens(rawText: string): number {
+  return Math.ceil(Buffer.byteLength(rawText, "utf-8") / 4);
+}
+
+// Wave 2: prefix cacheable — panjang prefix messages identik dengan request sebelumnya (per session/route).
+// Key: system prompt + role sequence. Nilai: bytes prefix yang stabil (kandidat prompt caching provider).
+const prefixCacheTracker = new Map<string, { rolesSig: string; prefixBytes: number; ts: number }>();
+const sessionLastFinalTokens = new Map<string, number>();
+function computeCacheablePrefix(sessionKey: string, chatReq: any): number | null {
+  try {
+    const messages: any[] = chatReq?.messages ?? [];
+    if (!Array.isArray(messages) || messages.length === 0) return null;
+    const rolesSig = messages.map((m: any) => m?.role ?? "?").join(",");
+    const prev = prefixCacheTracker.get(sessionKey);
+    prefixCacheTracker.set(sessionKey, { rolesSig, prefixBytes: 0, ts: Date.now() });
+    if (prefixCacheTracker.size > 500) {
+      // evict tertua
+      const oldest = [...prefixCacheTracker.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+      if (oldest) prefixCacheTracker.delete(oldest[0]);
+    }
+    if (!prev || prev.rolesSig === "" || !rolesSig.startsWith(prev.rolesSig)) return prev ? 0 : null;
+    // Hitung bytes prefix messages yang sama panjangnya dengan prev.rolesSig
+    const prevCount = prev.rolesSig.split(",").length;
+    let prefixBytes = 0;
+    for (let i = 0; i < Math.min(prevCount, messages.length); i++) {
+      prefixBytes += Buffer.byteLength(JSON.stringify(messages[i]), "utf-8");
+    }
+    return prefixBytes;
+  } catch {
+    return null;
+  }
 }
 
 export function createServer(config: ServerConfig) {
@@ -213,10 +249,32 @@ export function createServer(config: ServerConfig) {
           const streaming = isStreamingRequest(chatReq);
           timing.normalizationDoneAt = performance.now();
 
+          // Forward opencode headers untuk Console Go (x-opencode-session wajib, lihat https://opencode.ai/docs/go/#where-can-i-use-it)
+          // Whitelist wildcard x-opencode-* (R5: header baru otomatis lolos) + x-request-id; tidak bocor header sensitif lain
+          const forwardedOpencodeHeaders: Record<string, string> = {};
+          try {
+            for (const [k, v] of req.headers.entries()) {
+              const lk = k.toLowerCase();
+              if (lk.startsWith("x-opencode-") && v && typeof v === "string" && v.length > 0 && v.length < 2048) {
+                forwardedOpencodeHeaders[lk] = v;
+              }
+            }
+            // Juga teruskan x-request-id dari client jika ada (untuk trace)
+            const xReqId = req.headers.get("x-request-id") ?? req.headers.get("X-Request-Id");
+            if (xReqId && xReqId.length < 256) forwardedOpencodeHeaders["x-request-id"] = xReqId;
+          } catch {}
+          (chatReq as any).__forwardedHeaders = forwardedOpencodeHeaders;
+          if (Object.keys(forwardedOpencodeHeaders).length > 0) {
+            logger.debug("forwarded opencode headers", { requestId, hasSession: !!forwardedOpencodeHeaders["x-opencode-session"], keys: Object.keys(forwardedOpencodeHeaders) });
+          }
+
           // Profiling stage — Request Analyzer
           const rawBodyBytes = Buffer.byteLength(rawText, "utf-8");
           let profile = analyzeRequest(chatReq, rawBodyBytes);
-          let defaultRouteName = config.routes.defaultRoute ?? Object.keys(config.routes.routes)[0] ?? "fast";
+          let defaultRouteName = config.routes.defaultRoute ?? Object.keys(config.routes.routes)[0] ?? "balanced";
+
+          // Token accounting — originalInputTokens = estimasi SEBELUM optimizer apa pun
+          const accounting: Accounting = createAccounting(profile.estimatedTokens);
 
           // Duplicate Cache — Phase 10 (check before optimizers)
           let duplicateCacheHits = 0;
@@ -251,9 +309,9 @@ export function createServer(config: ServerConfig) {
             : { enabled: rtkEnabled };
           const pipelineResult = runOptimizers(chatReq, { rtk: rtkOpts.enabled ? rtkOpts : false });
           const rtkResult = pipelineResult.rtk!;
-          // Re-analyze after RTK if it succeeded (bytes changed)
+          // Re-estimate after RTK (Wave 3: quickEstimate dari delta bytes, tanpa stringify ulang penuh)
           if (rtkResult && !rtkResult.skipped && rtkResult.success) {
-            profile = analyzeRequest(chatReq, Buffer.byteLength(JSON.stringify(chatReq), "utf-8"));
+            profile = { ...profile, bodyBytes: Math.max(0, profile.bodyBytes - rtkResult.savedBytes), estimatedTokens: Math.ceil(Math.max(0, profile.bodyBytes - rtkResult.savedBytes) / 4) };
           }
           // RTK stage — konsolidasi ke baris chat (debug jika LOG_LEVEL=debug)
 
@@ -285,23 +343,41 @@ export function createServer(config: ServerConfig) {
           }
           // Re-analyze profile after RTK for Headroom threshold (already done above if RTK success)
           const headroomProfile = profile;
+          // Wave 7 — cache protect: provider cache (GLM 87.9% hit) lebih murah daripada kompresi ulang.
+          // Delta konteks kecil antar-turn → skip headroom agar prefix stabil tetap identik (cache hit).
+          const cacheProtectDeltaTokens = (config.optimization?.optimizers?.steering as any)?.cacheProtectDeltaTokens ?? 8000;
+          let cacheProtectSkipped = false;
+          {
+            const sessKey = (chatReq as any).__forwardedHeaders?.["x-opencode-session"] ?? (chatReq as any).__forwardedHeaders?.["x-request-id"] ?? "anon";
+            const prevFinal = sessionLastFinalTokens.get(sessKey);
+            if (prevFinal !== undefined && profile.estimatedTokens > prevFinal && (profile.estimatedTokens - prevFinal) < cacheProtectDeltaTokens) {
+              headroomEnabled = false;
+              cacheProtectSkipped = true;
+            }
+          }
           const headroomResult = await applyHeadroom(chatReq, headroomProfile, {
             enabled: headroomEnabled,
             url: headroomOpts.url,
             model: chatReq.model,
-            minimumTokens: headroomOpts.minimumTokens ?? (globalHeadroom as any)?.minimumTokens ?? 10000,
-            minimumBytes: headroomOpts.minimumBytes ?? (globalHeadroom as any)?.minimumBytes,
-            timeoutMs: headroomOpts.timeoutMs ?? 500,
-            maxConsecutiveFailures: headroomOpts.maxConsecutiveFailures ?? (globalHeadroom as any)?.maxConsecutiveFailures,
-            cooldownMs: headroomOpts.cooldownMs ?? (globalHeadroom as any)?.cooldownMs,
-            healthProbeMs: headroomOpts.healthProbeMs ?? (globalHeadroom as any)?.healthProbeMs,
+            minimumTokens: headroomOpts.minimumTokens ?? (globalHeadroom as any)?.minimumTokens ?? 6000,
+            minimumBytes: headroomOpts.minimumBytes ?? (globalHeadroom as any)?.minimumBytes ?? 8000,
+            timeoutMs: headroomOpts.timeoutMs ?? 6000,
+            maxConsecutiveFailures: headroomOpts.maxConsecutiveFailures ?? (globalHeadroom as any)?.maxConsecutiveFailures ?? 3,
+            cooldownMs: headroomOpts.cooldownMs ?? (globalHeadroom as any)?.cooldownMs ?? 30_000,
+            healthProbeMs: headroomOpts.healthProbeMs ?? (globalHeadroom as any)?.healthProbeMs ?? 500,
             failOpen: headroomOpts.failOpen ?? (globalHeadroom as any)?.failOpen ?? true,
-            compressUserMessages: headroomOpts.compressUserMessages ?? (globalHeadroom as any)?.compressUserMessages,
-            cacheTtlMs: headroomOpts.cacheTtlMs ?? (globalHeadroom as any)?.cacheTtlMs,
+            compressUserMessages: headroomOpts.compressUserMessages ?? (globalHeadroom as any)?.compressUserMessages ?? false,
+            cacheTtlMs: headroomOpts.cacheTtlMs ?? (globalHeadroom as any)?.cacheTtlMs ?? 10_000,
           });
-          // Re-analyze after Headroom if success
+          // Observabilitas: log timeout secara warn (bukan hanya debug) agar terlihat di LOG_LEVEL=info
+          if (headroomResult && headroomResult.reason && headroomResult.reason.includes("timeout")) {
+            logger.warn("headroom timeout", { requestId, reason: headroomResult.reason, endpoint: headroomResult.endpoint, durationMs: headroomResult.durationMs, timeoutMs: headroomOpts.timeoutMs });
+          } else if (headroomResult && headroomResult.reason && headroomResult.reason.includes("headroom_cooldown")) {
+            logger.debug("headroom cooldown skip", { requestId, reason: headroomResult.reason });
+          }
+          // Re-estimate after Headroom (Wave 3: quickEstimate dari delta bytes)
           if (headroomResult && !headroomResult.skipped && headroomResult.success) {
-            profile = analyzeRequest(chatReq, Buffer.byteLength(JSON.stringify(chatReq), "utf-8"));
+            profile = { ...profile, bodyBytes: Math.max(0, profile.bodyBytes - headroomResult.savedBytes), estimatedTokens: Math.ceil(Math.max(0, profile.bodyBytes - headroomResult.savedBytes) / 4) };
           }
           // Headroom stage — konsolidasi ke baris chat
 
@@ -318,13 +394,23 @@ export function createServer(config: ServerConfig) {
             else if (typeof globalCaveman === "string") cavemanMode = globalCaveman;
             else if (typeof globalCaveman === "object") cavemanMode = (globalCaveman as any).mode ?? ((globalCaveman as any).enabled ? "lite" : "off");
           }
+          // Wave 5 (data-driven): steering prompt ~825 token — bermakna di context besar,
+          // membengkakkan request kecil (empiris: 38 → 877 token pada task simple). Gate by size.
+          const minSteeringTokens = (config.optimization?.optimizers?.steering as any)?.minTokens ?? 4000;
+          if (cavemanMode !== "off" && profile.estimatedTokens < minSteeringTokens) cavemanMode = "off";
           const cavemanResult = applyCaveman(chatReq, cavemanMode);
           // Adaptive Routing — Phase 11 (decide route based on profile if enabled)
           const adaptiveEnabled = (config.optimization as any)?.optimizers?.adaptive?.enabled ?? false;
           let adaptiveReason = "disabled";
           let originalRoute = defaultRouteName;
           if (adaptiveEnabled) {
-            if (profile.estimatedTokens < 1000 && config.routes.routes["fast"]) {
+            const hasTools = profile.hasTools;
+            // Wave 3: background calls opencode (judul/summary — tanpa tools, pendek) → route fast,
+            // jangan bawa 45K+ context ke route balanced.
+            if (!hasTools && profile.estimatedTokens < 3000 && config.routes.routes["fast"]) {
+              defaultRouteName = "fast";
+              adaptiveReason = "background_call_fast";
+            } else if (profile.estimatedTokens < 1000 && config.routes.routes["fast"]) {
               defaultRouteName = "fast";
               adaptiveReason = "small_context_fast";
             } else if (profile.estimatedTokens < 30000 && config.routes.routes["balanced"]) {
@@ -354,8 +440,24 @@ export function createServer(config: ServerConfig) {
             else if (typeof globalPonytail === "string") ponytailMode = globalPonytail;
             else if (typeof globalPonytail === "object") ponytailMode = (globalPonytail as any).mode ?? ((globalPonytail as any).enabled ? "lite" : "off");
           }
-          const ponytailResult = applyPonytail(chatReq, ponytailMode);
+          const finalPonytailMode = ponytailMode !== "off" && profile.estimatedTokens < minSteeringTokens ? "off" : ponytailMode;
+          const ponytailResult = applyPonytail(chatReq, finalPonytailMode);
           // Ponytail — konsolidasi ke baris chat
+
+          // Finalize accounting optimizer stage: estimasi token yang benar-benar dikirim upstream
+          applyOptimizerSavings(
+            accounting,
+            {
+              rtkSavedBytes: rtkResult.savedBytes,
+              headroomSavedBytes: headroomResult.savedBytes ?? 0,
+              cavemanInjectedBytes: cavemanResult.injectedBytes,
+              ponytailInjectedBytes: ponytailResult.injectedBytes,
+            },
+            Math.ceil(Buffer.byteLength(JSON.stringify(chatReq), "utf-8") / 4),
+          );
+          // Wave 2: cacheable prefix per session (x-opencode-session atau x-request-id)
+          const sessionKey = (chatReq as any).__forwardedHeaders?.["x-opencode-session"] ?? (chatReq as any).__forwardedHeaders?.["x-request-id"] ?? "anon";
+          accounting.cacheableTokens = Math.ceil((computeCacheablePrefix(sessionKey, chatReq) ?? 0) / 4);
 
           // Duplicate Tool Cache — Phase 10 (check cache for tool outputs, TTL 3s)
           // Scan tool messages for cache hits
@@ -386,7 +488,16 @@ export function createServer(config: ServerConfig) {
               const inputTokens = usage.prompt_tokens ?? "unknown";
               const outputTokens = usage.completion_tokens ?? usage.output_tokens ?? "unknown";
               const cachedTokens = usage.cached_tokens ?? usage.cached_input_tokens ?? "unknown";
-              logger.info("chat", {
+              // Accounting: actual usage + fallback attempts yang sampai upstream
+              for (const a of result.attempts ?? []) {
+                if (!a.success && !a.skippedDueToCooldown && !a.skippedDueToContext) recordFallbackAttempt(accounting, accounting.finalUpstreamInputTokens, a.errorClass);
+              }
+      applyActualUsage(accounting, usage, config.prices ?? {}, result.provider, result.model);
+      finalizeAccounting(accounting);
+      // Wave 7: update last final tokens for cache protect
+      const sessKey = (chatReq as any).__forwardedHeaders?.["x-opencode-session"] ?? (chatReq as any).__forwardedHeaders?.["x-request-id"] ?? "anon";
+      sessionLastFinalTokens.set(sessKey, accounting.finalUpstreamInputTokens);
+      logger.info("chat", {
                 requestId,
                 route: defaultRouteName,
                 provider: result.provider,
@@ -405,6 +516,7 @@ export function createServer(config: ServerConfig) {
                 headroom: { enabled: headroomResult.enabled, savedBytes: headroomResult.savedBytes, savedPercent: Number(headroomResult.savedPercent.toFixed(1)), reason: headroomResult.reason },
                 caveman: cavemanResult.mode,
                 ponytail: ponytailResult.mode,
+                accounting: accountToLogFields(accounting),
               });
               recordMetric({
                 requestId,
@@ -432,6 +544,7 @@ export function createServer(config: ServerConfig) {
                 rtkDurationMs: rtkResult.durationMs,
                 headroom: headroomResult,
                 headroomDurationMs: headroomResult.durationMs,
+                accounting: accountToLogFields(accounting),
               });
               void recordRequestLog({
                 requestId,
@@ -448,6 +561,7 @@ export function createServer(config: ServerConfig) {
                 cachedInputTokens: cachedTokens,
                 rtkSavedBytes: rtkResult.savedBytes,
                 headroomSavedBytes: headroomResult.savedBytes,
+                accounting: accountToLogFields(accounting),
               });
               return new Response(JSON.stringify(response), {
                 status: 200,
@@ -461,8 +575,10 @@ export function createServer(config: ServerConfig) {
               // Jika upstream kirim 400 tapi isinya "Model is unavailable" (transient), promosikan ke 503 agar client tidak anggap deterministic
               const bodyStrLower = err.body ? JSON.stringify(err.body).toLowerCase() : "";
               const msgLower = String(err.message ?? "").toLowerCase();
-              const isUnavailable = bodyStrLower.includes("unavailable") || msgLower.includes("unavailable") || bodyStrLower.includes("capacity") || msgLower.includes("capacity");
-              if (isUnavailable && errorClassForLog === "transient" && (resolvedStatus === 400 || resolvedStatus === 404)) {
+              const isUnavailable = bodyStrLower.includes("unavailable") || msgLower.includes("unavailable") || bodyStrLower.includes("capacity") || msgLower.includes("capacity") || bodyStrLower.includes("weekly usage limit") || msgLower.includes("usage limit") || bodyStrLower.includes("rate limit") || msgLower.includes("rate limit");
+              const isMissingSession = bodyStrLower.includes("x-opencode-session") || msgLower.includes("x-opencode-session") || bodyStrLower.includes("cannot be routed efficiently") || msgLower.includes("cannot be routed efficiently");
+              const isFreeTier = bodyStrLower.includes("free tier") || msgLower.includes("free tier");
+              if ((isUnavailable || isMissingSession || isFreeTier) && errorClassForLog === "transient" && (resolvedStatus === 400 || resolvedStatus === 404)) {
                 resolvedStatus = 503;
               }
               let errorBody: string;
@@ -478,7 +594,10 @@ export function createServer(config: ServerConfig) {
                     parsed.error.attempts = attempts.map((a: any) => ({ provider: a.provider, model: a.model, status: a.status, errorClass: a.errorClass, skippedDueToCooldown: a.skippedDueToCooldown }));
                     parsed.error.fallbackCount = attempts.filter((a: any) => a.skippedDueToCooldown || !a.success).length;
                     parsed.error.route = defaultRouteName;
-                    if (isUnavailable) {
+                    if (isMissingSession) {
+                      parsed.error.hint = "Request is missing x-opencode-session (Console Go). Gateway meneruskan header dari client; pastikan client mengirim x-opencode-session (lihat https://opencode.ai/docs/go/#where-can-i-use-it). Jika tanpa session, gateway sudah fallback ke ollama-cloud/openrouter. Cek /debug/routes & logs.";
+                      parsed.error.code = "missing_opencode_session";
+                    } else if (isUnavailable) {
                       parsed.error.hint = "Model is unavailable di provider primary. Gateway sudah coba fallback (" + attempts.length + " attempts). Jika semua gagal, periksa config/routes.json — urutan fallback mungkin stale. Cek /debug/routes & /metrics. Model yang sering unavailable akan di-cooldown 30s.";
                       parsed.error.code = "model_unavailable";
                     }
@@ -516,7 +635,15 @@ export function createServer(config: ServerConfig) {
                 logger.debug("error-memory", { requestId, fingerprint: entry.fingerprint.slice(0,12), category, count: entry.count, cooldownUntil: entry.cooldownUntil });
               } catch {}
               const logLevel = isUnavailable ? "warn" : "warn";
-              logger.warn("upstream error passthrough", { requestId, route: defaultRouteName, provider: attemptedProvider, status: resolvedStatus, errorClass: errorClassForLog, isUnavailable, attempts: attempts.length, latencyMs: m.totalLatency, bodyPreview: (() => { try { return JSON.stringify(err.body).slice(0,300); } catch { return String(err.body).slice(0,300); } })() });
+              // Accounting untuk path gagal: hitung fallback tokens dari attempts yang sampai upstream
+              for (const a of attempts) {
+                if (!a.success && !a.skippedDueToCooldown && !a.skippedDueToContext) recordFallbackAttempt(accounting, accounting.finalUpstreamInputTokens, a.errorClass);
+              }
+              finalizeAccounting(accounting);
+              // Wave 7: track error path final tokens
+              const sessKey3 = (chatReq as any).__forwardedHeaders?.["x-opencode-session"] ?? (chatReq as any).__forwardedHeaders?.["x-request-id"] ?? "anon";
+              sessionLastFinalTokens.set(sessKey3, accounting.finalUpstreamInputTokens);
+              logger.warn("upstream error passthrough", { requestId, route: defaultRouteName, provider: attemptedProvider, status: resolvedStatus, errorClass: errorClassForLog, isUnavailable, isMissingSession, attempts: attempts.length, latencyMs: m.totalLatency, hasSession: !!( (chatReq as any).__forwardedHeaders?.["x-opencode-session"]), accounting: accountToLogFields(accounting), bodyPreview: (() => { try { return JSON.stringify(err.body).slice(0,300); } catch { return String(err.body).slice(0,300); } })() });
               recordMetric({
                 requestId,
                 route: defaultRouteName,
@@ -594,7 +721,16 @@ export function createServer(config: ServerConfig) {
                   timing.providerFinishedAt = performance.now();
                   timing.responseFinishedAt = performance.now();
                   const m = computeMetrics(timing);
-                  logger.info("chat", {
+                  // Accounting: actual usage dari stream + fallback attempts yang sampai upstream
+                  for (const a of result.attempts ?? []) {
+                    if (!a.success && !a.skippedDueToCooldown && !a.skippedDueToContext) recordFallbackAttempt(accounting, accounting.finalUpstreamInputTokens, a.errorClass);
+                  }
+                  applyActualUsage(accounting, streamUsage as any, config.prices ?? {}, providerId, modelUsed);
+                  finalizeAccounting(accounting);
+    // Wave 7: update last final tokens for cache protect
+    const sessKey2 = (chatReq as any).__forwardedHeaders?.["x-opencode-session"] ?? (chatReq as any).__forwardedHeaders?.["x-request-id"] ?? "anon";
+    sessionLastFinalTokens.set(sessKey2, accounting.finalUpstreamInputTokens);
+    logger.info("chat", {
                     requestId,
                     route: defaultRouteName,
                     provider: providerId,
@@ -605,11 +741,16 @@ export function createServer(config: ServerConfig) {
                     gatewayOverheadMs: m.gatewayOverhead,
                     ttftMs: m.ttft,
                     fallbackCount: result.fallbackCount,
+                    inputTokens: accounting.actualPromptTokens ?? "unknown",
+                    outputTokens: accounting.actualOutputTokens ?? "unknown",
+                    cachedInputTokens: accounting.cachedInputTokens ?? "unknown",
                     estimatedTokens: profile.estimatedTokens,
+                    originalEstimatedTokens: accounting.originalInputTokens,
                     rtk: { enabled: rtkResult.enabled, savedBytes: rtkResult.savedBytes, savedPercent: Number(rtkResult.savedPercent.toFixed(1)) },
                     headroom: { enabled: headroomResult.enabled, savedBytes: headroomResult.savedBytes, savedPercent: Number(headroomResult.savedPercent.toFixed(1)), reason: headroomResult.reason },
                     caveman: cavemanResult.mode,
                     ponytail: ponytailResult.mode,
+                    accounting: accountToLogFields(accounting),
                   });
                   recordMetric({
                     requestId,
@@ -629,8 +770,9 @@ export function createServer(config: ServerConfig) {
                     toolHistoryBytes: profile.toolHistoryBytes,
                     estimatedTokens: profile.estimatedTokens,
                     fallbackCount: result.fallbackCount,
-                    inputTokens: streamUsage?.prompt_tokens ?? "unknown",
-                    outputTokens: streamUsage?.completion_tokens ?? "unknown",
+                    inputTokens: accounting.actualPromptTokens ?? "unknown",
+                    outputTokens: accounting.actualOutputTokens ?? "unknown",
+                    cachedInputTokens: accounting.cachedInputTokens ?? "unknown",
                     rtk: rtkResult,
                     rtkDurationMs: rtkResult.durationMs,
                     headroom: headroomResult,
@@ -646,10 +788,12 @@ export function createServer(config: ServerConfig) {
                     ts: Date.now(),
                     totalLatencyMs: m.totalLatency,
                     ttftMs: m.ttft,
-                    inputTokens: streamUsage?.prompt_tokens ?? "unknown",
-                    outputTokens: streamUsage?.completion_tokens ?? "unknown",
+                    inputTokens: accounting.actualPromptTokens ?? "unknown",
+                    outputTokens: accounting.actualOutputTokens ?? "unknown",
+                    cachedInputTokens: accounting.cachedInputTokens ?? "unknown",
                     rtkSavedBytes: rtkResult.savedBytes,
                     headroomSavedBytes: headroomResult.savedBytes,
+                    accounting: accountToLogFields(accounting),
                   });
                   try { controller.close(); } catch {}
                 } catch (err) {
@@ -687,8 +831,10 @@ export function createServer(config: ServerConfig) {
             let resolvedStatus = status;
             const bodyStrLower = err.body ? JSON.stringify(err.body).toLowerCase() : "";
             const msgLower = String(err.message ?? "").toLowerCase();
-            const isUnavailable = bodyStrLower.includes("unavailable") || msgLower.includes("unavailable") || bodyStrLower.includes("no available channel") || msgLower.includes("no available channel") || bodyStrLower.includes("capacity") || bodyStrLower.includes("rate limit");
-            if (isUnavailable && errorClassForLog === "transient" && (status === 400 || status === 404)) resolvedStatus = 503;
+            const isUnavailable = bodyStrLower.includes("unavailable") || msgLower.includes("unavailable") || bodyStrLower.includes("no available channel") || msgLower.includes("no available channel") || bodyStrLower.includes("capacity") || bodyStrLower.includes("rate limit") || bodyStrLower.includes("weekly usage limit") || msgLower.includes("weekly usage limit") || bodyStrLower.includes("usage limit") || msgLower.includes("usage limit");
+            const isMissingSession = bodyStrLower.includes("x-opencode-session") || msgLower.includes("x-opencode-session") || bodyStrLower.includes("cannot be routed efficiently") || msgLower.includes("cannot be routed efficiently");
+            const isFreeTierStream = bodyStrLower.includes("free tier") || msgLower.includes("free tier");
+            if ((isUnavailable || isMissingSession || isFreeTierStream) && errorClassForLog === "transient" && (status === 400 || status === 404)) resolvedStatus = 503;
             // Jika semua attempts adalah cooldown, beri Retry-After agar opencode tidak retry membabi-buta setiap 2s
             const allCooldown = attempts.length > 0 && attempts.every((a: any) => a.skippedDueToCooldown || a.errorClass === "cooldown");
             const cooldownSummary = globalHealthStore.getCooldownSummary();
@@ -709,7 +855,8 @@ export function createServer(config: ServerConfig) {
                     parsed.error.code = "all_providers_cooldown";
                     parsed.error.hint = `All stream providers failed or in cooldown (${attempts.length} attempts, ${cooldownSummary.inCooldown} in cooldown). Retry-After ${retryAfterSec}s. Cek /debug/routes & logs/mini-routingai.log. Cooldown akan reset ~${Math.ceil(maxRemainingMs / 1000)}s.`;
                     parsed.error.retryAfter = retryAfterSec;
-                  } else if (isUnavailable) parsed.error.hint = "Model is unavailable (stream). Gateway fallback sebelum first chunk; jika semua gagal cek fallback chain.";
+                  } else if (isMissingSession) parsed.error.hint = "Missing x-opencode-session (Console Go, stream). Pastikan client kirim x-opencode-session; gateway fallback ke ollama-cloud/openrouter. Lihat https://opencode.ai/docs/go/#where-can-i-use-it";
+                  else if (isUnavailable) parsed.error.hint = "Model is unavailable (stream). Gateway fallback sebelum first chunk; jika semua gagal cek fallback chain.";
                   errorBody = JSON.stringify(parsed);
                 } catch {}
               }
@@ -718,14 +865,15 @@ export function createServer(config: ServerConfig) {
               // Khusus kasus All stream providers failed or cooldown tanpa body
               const isAllCooldownMsg = msgLower.includes("all stream providers failed") || msgLower.includes("all providers failed");
               const enriched: any = { message: isAllCooldownMsg ? `All stream providers failed or cooldown (attempts=${attempts.length}, cooldowns=${cooldownSummary.inCooldown}) — Retry-After ${retryAfterSec}s` : msg, type: "upstream_error", code: isAllCooldownMsg || allCooldown ? "all_providers_cooldown" : String(resolvedStatus), attempts: attempts.length ? attempts : undefined, route: defaultRouteName, cooldowns: cooldownSummary, retryAfter: retryAfterSec || undefined };
-              if (isUnavailable && !allCooldown) enriched.hint = "Model is unavailable (stream). Gateway fallback sebelum first chunk; jika semua gagal cek fallback chain.";
+              if (isMissingSession && !allCooldown) enriched.hint = "Missing x-opencode-session (Console Go, stream). Pastikan client kirim x-opencode-session; gateway fallback ke ollama-cloud/openrouter.";
+              else if (isUnavailable && !allCooldown) enriched.hint = "Model is unavailable (stream). Gateway fallback sebelum first chunk; jika semua gagal cek fallback chain.";
               if (isAllCooldownMsg || allCooldown) enriched.hint = `All ${attempts.length} providers in cooldown/failure. Tunggu ${retryAfterSec}s atau cek /debug/routes. Fallback chain: ${attempts.map((a: any) => a.provider + "/" + a.model).join(", ")}`;
               errorBody = JSON.stringify({ error: enriched });
             }
             timing.providerFinishedAt = performance.now();
             timing.responseFinishedAt = performance.now();
             const m = computeMetrics(timing);
-            logger.warn("upstream stream error", { requestId, route: defaultRouteName, status: resolvedStatus, errorClass: errorClassForLog, isUnavailable, allCooldown, attempts: attempts.length, cooldowns: cooldownSummary.inCooldown, retryAfterSec, error: String(err).slice(0,500) });
+            logger.warn("upstream stream error", { requestId, route: defaultRouteName, status: resolvedStatus, errorClass: errorClassForLog, isUnavailable, isMissingSession, allCooldown, attempts: attempts.length, cooldowns: cooldownSummary.inCooldown, retryAfterSec, error: String(err).slice(0,500) });
             recordMetric({ requestId, route: defaultRouteName, model: chatReq.model, status: resolvedStatus, timestamp: Date.now(), totalLatencyMs: m.totalLatency, gatewayOverheadMs: m.gatewayOverhead, rtk: rtkResult, rtkDurationMs: rtkResult.durationMs, headroom: headroomResult, headroomDurationMs: headroomResult.durationMs });
             const respHeaders: Record<string, string> = { "Content-Type": "application/json", ...baseHeaders, "x-attempts": String(attempts.length), "x-error-class": errorClassForLog };
             if (retryAfterSec > 0) respHeaders["Retry-After"] = String(retryAfterSec);

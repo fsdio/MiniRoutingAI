@@ -13,6 +13,8 @@
     "logs": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 logs",
     "headroom:start": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 headroom-start",
     "headroom:stop": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 headroom-stop",
+    "headroom:restart": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 headroom-restart",
+    "restart:all": "powershell -ExecutionPolicy Bypass -File scripts/manage.ps1 restart-all",
     "test": "bun test",
     "benchmark": "bun run scripts/benchmark.ts",
     "typecheck": "tsc --noEmit"

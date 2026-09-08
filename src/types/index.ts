@@ -73,6 +73,8 @@ export interface ProviderConfig {
   defaultWeight?: number;
   tags?: string[];
   avgLatencyMs?: number;
+  // Capability flags (R5 anti-regresi): butuh x-opencode-session dari client agar tidak 400
+  requiresSession?: boolean;
 }
 
 export interface ProvidersFile {
@@ -94,7 +96,7 @@ export interface OptimizerRouteConfig {
 }
 
 export interface RouteConfig {
-  strategy: "fallback" | "round-robin" | "weighted-round-robin";
+  strategy: "fallback" | "round-robin" | "weighted-round-robin" | "cache-aware-sticky";
   primary?: RouteTarget;
   fallbacks?: RouteTarget[];
   models?: RouteTarget[];
@@ -104,6 +106,8 @@ export interface RouteConfig {
   healthAwareOrdering?: boolean;
   minHealthyCandidates?: number;
   modelHints?: string[];
+  warmThresholdRequests?: number;
+  sameProviderFallback?: boolean;
 }
 
 export interface RoutesFile {
