@@ -116,7 +116,7 @@ export function computeCandidateScores(
   candidates: RouteTarget[],
   healthStore: HealthStore,
   providers: ProviderConfig[],
-  requestTags?: string[],
+  _requestTags?: string[],
 ): CandidateScore[] {
   return candidates.map((target) => {
     const providerCfg = providers.find((p) => p.id === target.provider);
@@ -132,18 +132,11 @@ export function computeCandidateScores(
     const avgLatency = providerCfg?.avgLatencyMs ?? 2000;
     const latencyScore = 1 / (avgLatency / 1000); // normalize to seconds
 
-    // Tag match bonus
-    let tagBonus = 0;
-    if (requestTags && target.tags) {
-      const matches = requestTags.filter((t) => target.tags!.includes(t)).length;
-      tagBonus = matches * 0.1;
-    }
-
     // Weight from route config (default 1)
     const weight = target.weight ?? providerCfg?.defaultWeight ?? 1;
 
-    // Combined score: health * success * latency * weight + tag bonus
-    const score = healthScore * successRate * latencyScore * weight + tagBonus;
+    // Combined score: health * success * latency * weight (tags sudah dihapus)
+    const score = healthScore * successRate * latencyScore * weight;
 
     return { target, score, healthScore, latencyScore };
   });

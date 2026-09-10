@@ -71,7 +71,6 @@ export interface ProviderConfig {
   apiKeyEnv?: string;
   models?: string[];
   defaultWeight?: number;
-  tags?: string[];
   avgLatencyMs?: number;
   // Capability flags (R5 anti-regresi): butuh x-opencode-session dari client agar tidak 400
   requiresSession?: boolean;
@@ -85,7 +84,9 @@ export interface RouteTarget {
   provider: string;
   model: string;
   weight?: number;
-  tags?: string[];
+  // Untuk openrouter: pin provider fisik (contoh: ["open-inference/fp8"] / ["relace/fp4"])
+  providers?: string[];
+  reasoning?: { enabled: boolean } & Record<string, unknown>;
 }
 
 export interface OptimizerRouteConfig {

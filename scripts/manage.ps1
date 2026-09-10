@@ -696,6 +696,15 @@ function Start-Headroom {
       if (-not $alive) {
         Write-Host "[headroom] Proses $($proc.Id) mati sebelum health OK - cek log $HeadroomLogFile" -ForegroundColor Red
         try { Get-Content $HeadroomLogFile -Tail 20 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray } } catch {}
+        # Hint spesifik: mismatch pydantic-core (sering terjadi setelah pip install -U sembarangan)
+        try {
+          if (Select-String -Path $HeadroomLogFile -Pattern "pydantic-core.*incompatible|_ensure_pydantic_core_version" -SimpleMatch -ErrorAction SilentlyContinue -or (Select-String -Path $HeadroomLogFile -Pattern "pydantic-core" -SimpleMatch -ErrorAction SilentlyContinue -and (Select-String -Path $HeadroomLogFile -Pattern "incompatible" -SimpleMatch -ErrorAction SilentlyContinue))) {
+            Write-Host "[headroom] Hint: terdeteksi SystemError pydantic-core incompatible." -ForegroundColor Yellow
+            Write-Host "[headroom] Hint: samakan versi core dengan syarat pydantic:" -ForegroundColor Gray
+            Write-Host '  C:\Users\kings\AppData\Local\Programs\Python\Python314\python.exe -m pip install --force-reinstall "pydantic-core==2.46.5"' -ForegroundColor White
+            Write-Host "[headroom] Hint alternatif (isolasi pipx): pipx reinstall headroom-ai" -ForegroundColor Gray
+          }
+        } catch {}
         break
       }
       foreach ($hu in $healthUrls) {
@@ -726,6 +735,11 @@ function Start-Headroom {
         Write-Host "[headroom] Hint: Get-Content $HeadroomLogFile -Tail 50 | cek traceback Python / port conflict. Coba: headroom proxy --port $port --mode token secara manual" -ForegroundColor Gray
       } else {
         Write-Host "[headroom] Health belum OK dan proses mati - cek log $HeadroomLogFile" -ForegroundColor Red
+        try {
+          if (Select-String -Path $HeadroomLogFile -Pattern "pydantic-core" -SimpleMatch -ErrorAction SilentlyContinue) {
+            Write-Host "[headroom] Hint: cek mismatch pydantic/pydantic-core: python -m pip show pydantic pydantic-core" -ForegroundColor Yellow
+          }
+        } catch {}
       }
       try { Get-Content $HeadroomLogFile -Tail 15 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray } } catch {}
     }

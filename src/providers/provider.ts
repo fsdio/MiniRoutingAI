@@ -70,7 +70,53 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
 
   protected normalizeRequest(request: ChatCompletionRequest): ChatCompletionRequest {
     // Normalisasi OpenAI + provider quirks (registry), termasuk stream_options.include_usage.
-    return prepareOpenAIRequest(request, this.id) as ChatCompletionRequest;
+    let normalized = prepareOpenAIRequest(request, this.id) as Record<string, any>;
+
+    // OpenRouter provider pinning: deepseek → open-inference/fp8, glm-5.3-flash → relace/fp4
+    if (this.id === "openrouter") {
+      const OPENROUTER_PIN_MAP: Record<string, string[]> = {
+        "deepseek/deepseek-v4-flash-0731": ["open-inference/fp8"],
+        "z-ai/glm-5.3-flash": ["relace/fp4"],
+      };
+      const getPin = (model: string): string[] | undefined => {
+        if (!model) return undefined;
+        if (OPENROUTER_PIN_MAP[model]) return OPENROUTER_PIN_MAP[model];
+        const base = model.split(":")[0];
+        if (OPENROUTER_PIN_MAP[base]) return OPENROUTER_PIN_MAP[base];
+        return undefined;
+      };
+
+      // Prioritas: declarative dari router (__providerOrder/__openrouterProviders) > hardcoded map
+      const forwardedOrder: string[] | undefined = (request as any).__providerOrder as string[] | undefined;
+      const targetProviders: string[] | undefined = (request as any).__openrouterProviders as string[] | undefined;
+      let order: string[] | undefined = forwardedOrder ?? targetProviders;
+      if (!order) {
+        order = getPin(normalized.model ?? (request as any).model);
+      }
+      if (order && order.length > 0) {
+        const existing = normalized.provider as Record<string, any> | undefined;
+        normalized.provider = { ...(existing ?? {}), order };
+      }
+
+      const needsReasoning = !!getPin(normalized.model ?? (request as any).model) || !!order;
+      const declarativeReasoning = (request as any).__reasoning as Record<string, any> | undefined;
+      if (declarativeReasoning) {
+        normalized.reasoning = { ...(normalized.reasoning ?? {}), ...declarativeReasoning };
+      } else if (needsReasoning) {
+        const existingReasoning = normalized.reasoning as Record<string, any> | undefined;
+        if (!existingReasoning) {
+          normalized.reasoning = { enabled: true };
+        } else if (existingReasoning.enabled === undefined) {
+          normalized.reasoning = { ...existingReasoning, enabled: true };
+        }
+      }
+
+      if ((normalized as any).__providerOrder) delete (normalized as any).__providerOrder;
+      if ((normalized as any).__openrouterProviders) delete (normalized as any).__openrouterProviders;
+      if ((normalized as any).__reasoning) delete (normalized as any).__reasoning;
+    }
+
+    return normalized as ChatCompletionRequest;
   }
 
   async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {

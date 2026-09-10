@@ -380,6 +380,8 @@ export class Router {
         ...request,
         model: resolveTargetModel(request.model, target.model),
         stream: false,
+        ...(target.providers ? { __providerOrder: target.providers, __openrouterProviders: target.providers } as any : {}),
+        ...(target.reasoning ? { __reasoning: target.reasoning } as any : {}),
       };
 
       const start = performance.now();
@@ -557,6 +559,8 @@ export class Router {
         ...request,
         model: resolveTargetModel(request.model, target.model),
         stream: true,
+        ...(target.providers ? { __providerOrder: target.providers, __openrouterProviders: target.providers } as any : {}),
+        ...(target.reasoning ? { __reasoning: target.reasoning } as any : {}),
       };
 
       const start = performance.now();

@@ -873,7 +873,9 @@ export function createServer(config: ServerConfig) {
             timing.providerFinishedAt = performance.now();
             timing.responseFinishedAt = performance.now();
             const m = computeMetrics(timing);
-            logger.warn("upstream stream error", { requestId, route: defaultRouteName, status: resolvedStatus, errorClass: errorClassForLog, isUnavailable, isMissingSession, allCooldown, attempts: attempts.length, cooldowns: cooldownSummary.inCooldown, retryAfterSec, error: String(err).slice(0,500) });
+            // Detail attempts untuk debug stream 502 (8 attempts vs 14 kandidat)
+            const attemptsDetail = attempts.map((a: any) => `${a.provider}/${a.model}:${a.status ?? "?"}:${a.errorClass ?? "?"}${a.skippedDueToCooldown ? ":cooldown" : ""}`).join(" | ");
+            logger.warn("upstream stream error", { requestId, route: defaultRouteName, status: resolvedStatus, errorClass: errorClassForLog, isUnavailable, isMissingSession, allCooldown, attempts: attempts.length, cooldowns: cooldownSummary.inCooldown, retryAfterSec, attemptsDetail: attemptsDetail.slice(0,2000), error: String(err).slice(0,500), bodyPreview: (()=>{ try{ return JSON.stringify(err.body).slice(0,500)}catch{return String(err.body).slice(0,500)}})() });
             recordMetric({ requestId, route: defaultRouteName, model: chatReq.model, status: resolvedStatus, timestamp: Date.now(), totalLatencyMs: m.totalLatency, gatewayOverheadMs: m.gatewayOverhead, rtk: rtkResult, rtkDurationMs: rtkResult.durationMs, headroom: headroomResult, headroomDurationMs: headroomResult.durationMs });
             const respHeaders: Record<string, string> = { "Content-Type": "application/json", ...baseHeaders, "x-attempts": String(attempts.length), "x-error-class": errorClassForLog };
             if (retryAfterSec > 0) respHeaders["Retry-After"] = String(retryAfterSec);
