@@ -1,11 +1,8 @@
 {
-  "$comment": "USD per 1M tokens. Key: provider:model atau provider untuk default semua model tsb. Tanpa entri = cost tidak dihitung (null).",
+  "$comment": "USD per 1M tokens. Key: provider:model atau provider untuk default semua model tsb. Tanpa entri = cost tidak dihitung (null). Hanya deepseek-v4-flash yang aktif.",
   "prices": {
     "juan": { "inputPerMillion": 0.2, "outputPerMillion": 1.0, "cachedInputPerMillion": 0.02 },
     "opencode-go": { "inputPerMillion": 0.5, "outputPerMillion": 2.0 },
-    "opencode": { "inputPerMillion": 0.0, "outputPerMillion": 0.0 },
-    "openrouter": { "inputPerMillion": 0.0, "outputPerMillion": 0.0 },
-    "nvidia": { "inputPerMillion": 0.0, "outputPerMillion": 0.0 },
-    "ollama-cloud": { "inputPerMillion": 0.0, "outputPerMillion": 0.0 }
+    "openrouter": { "inputPerMillion": 0.0, "outputPerMillion": 0.0 }
   }
 }

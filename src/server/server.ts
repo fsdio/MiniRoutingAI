@@ -361,8 +361,8 @@ export function createServer(config: ServerConfig) {
             model: chatReq.model,
             minimumTokens: headroomOpts.minimumTokens ?? (globalHeadroom as any)?.minimumTokens ?? 6000,
             minimumBytes: headroomOpts.minimumBytes ?? (globalHeadroom as any)?.minimumBytes ?? 8000,
-            timeoutMs: headroomOpts.timeoutMs ?? 6000,
-            maxConsecutiveFailures: headroomOpts.maxConsecutiveFailures ?? (globalHeadroom as any)?.maxConsecutiveFailures ?? 3,
+            timeoutMs: headroomOpts.timeoutMs ?? 4000,
+            maxConsecutiveFailures: headroomOpts.maxConsecutiveFailures ?? (globalHeadroom as any)?.maxConsecutiveFailures ?? 2,
             cooldownMs: headroomOpts.cooldownMs ?? (globalHeadroom as any)?.cooldownMs ?? 30_000,
             healthProbeMs: headroomOpts.healthProbeMs ?? (globalHeadroom as any)?.healthProbeMs ?? 500,
             failOpen: headroomOpts.failOpen ?? (globalHeadroom as any)?.failOpen ?? true,
@@ -370,7 +370,8 @@ export function createServer(config: ServerConfig) {
             cacheTtlMs: headroomOpts.cacheTtlMs ?? (globalHeadroom as any)?.cacheTtlMs ?? 10_000,
           });
           // Observabilitas: log timeout secara warn (bukan hanya debug) agar terlihat di LOG_LEVEL=info
-          if (headroomResult && headroomResult.reason && headroomResult.reason.includes("timeout")) {
+          // Exclude "payload_too_large_expected_timeout" — itu early skip, bukan timeout aktual
+          if (headroomResult && headroomResult.reason && headroomResult.reason.includes("timeout") && !headroomResult.reason.includes("payload_too_large")) {
             logger.warn("headroom timeout", { requestId, reason: headroomResult.reason, endpoint: headroomResult.endpoint, durationMs: headroomResult.durationMs, timeoutMs: headroomOpts.timeoutMs });
           } else if (headroomResult && headroomResult.reason && headroomResult.reason.includes("headroom_cooldown")) {
             logger.debug("headroom cooldown skip", { requestId, reason: headroomResult.reason });
@@ -837,9 +838,12 @@ export function createServer(config: ServerConfig) {
             if ((isUnavailable || isMissingSession || isFreeTierStream) && errorClassForLog === "transient" && (status === 400 || status === 404)) resolvedStatus = 503;
             // Jika semua attempts adalah cooldown, beri Retry-After agar opencode tidak retry membabi-buta setiap 2s
             const allCooldown = attempts.length > 0 && attempts.every((a: any) => a.skippedDueToCooldown || a.errorClass === "cooldown");
+            // Perluasan: campuran cooldown + context_overflow juga tidak actionable dalam waktu dekat
+            // (payload tidak mengecil antar-retry, cooldown butuh waktu) → tetap beri Retry-After
+            const allBlockedOrCooldown = attempts.length > 0 && attempts.every((a: any) => (a.skippedDueToCooldown || a.errorClass === "cooldown") || (a.skippedDueToContext || a.errorClass === "context_overflow"));
             const cooldownSummary = globalHealthStore.getCooldownSummary();
             const maxRemainingMs = Math.max(0, ...cooldownSummary.details.map((d) => d.remainingMs), 0);
-            const retryAfterSec = allCooldown ? Math.max(5, Math.ceil(maxRemainingMs / 1000)) : 0;
+            const retryAfterSec = (allCooldown || allBlockedOrCooldown) && maxRemainingMs > 0 ? Math.max(5, Math.ceil(maxRemainingMs / 1000)) : 0;
             let errorBody: string;
             if (err.body) {
               errorBody = typeof err.body === "string" ? err.body : JSON.stringify(err.body);

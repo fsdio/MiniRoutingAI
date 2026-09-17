@@ -38,17 +38,22 @@ export interface HeadroomResult {
   endpoint?: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 8000;
+const DEFAULT_TIMEOUT_MS = 4000;
 const DEFAULT_MIN_TOKENS = 6000;
-const DEFAULT_MAX_CONSECUTIVE_FAILURES = 3;
+const DEFAULT_MAX_CONSECUTIVE_FAILURES = 2;
 const DEFAULT_COOLDOWN_MS = 30_000;
-const DEFAULT_HEALTH_PROBE_MS = 1000;
+const DEFAULT_HEALTH_PROBE_MS = 500;
 const DEFAULT_CACHE_TTL_MS = 10_000;
 const HEALTH_CACHE_MS = 3_000;
-const MAX_EFFECTIVE_TIMEOUT_MS = 12000;
-const ADAPTIVE_TIMEOUT_PER_KB_MS = 1.5; // tambah 1.5ms per KB payload, cap MAX_EFFECTIVE_TIMEOUT_MS (untuk 300k tokens ~1.2MB -> +~1800ms)
-// R4: payload >4MB → skip headroom (Python compress lambat di payload ekstrem, RTK tetap jalan)
-const MAX_HEADROOM_PAYLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_EFFECTIVE_TIMEOUT_MS = 6000;
+const ADAPTIVE_TIMEOUT_PER_KB_MS = 0.8; // tambah 0.8ms per KB payload, cap MAX_EFFECTIVE_TIMEOUT_MS (untuk 300k tokens ~1.2MB -> +~960ms)
+// R4: payload >1.5MB → skip headroom (Python compress lambat di payload ekstrem, RTK tetap jalan) — turun dari 4MB karena 1.5MB sudah ~375k tokens pasti timeout
+const MAX_HEADROOM_PAYLOAD_BYTES = 1.5 * 1024 * 1024;
+// Early-skip untuk payload sangat besar: >180k tokens hampir pasti timeout Python, fail-fast tanpa fetch.
+// REVERT R6 (2026-09-10): pernah dinaikkan ke 320k agar 180-320k dicoba kompresi (unlock provider 128k/256k),
+// tapi terbukti proxy headroom timeout ~4.7s untuk payload 200k → buang 5s per request tanpa manfaat.
+// Kembali ke 180k: fail-open cepat, request besar langsung lanjut ke provider 1M di fallback chain.
+const SKIP_IF_EST_TOKENS_GT = 180_000;
 
 // Circuit breaker state — in-memory, reset on success
 let consecutiveFailures = 0;
@@ -62,7 +67,13 @@ let lastConnectionDown = false;
 
 // R3: cooldown singkat saat proxy definitif-down (connection refused) — auto-retry cepat,
 // jangan biarkan tiap request bayar 8-12s callCompress timeout
-const DEFAULT_CONNECTION_DOWN_COOLDOWN_MS = 5_000;
+const DEFAULT_CONNECTION_DOWN_COOLDOWN_MS = 8_000;
+
+// Probe timeout yang beruntun dihitung sebagai failure (fail-fast), bukan inconclusive
+let probeTimeoutFailures = 0;
+const PROBE_TIMEOUT_FAILURE_THRESHOLD = 2;
+const PROBE_TIMEOUT_WINDOW_MS = 10_000;
+let probeTimeoutWindowStart = 0;
 
 // Result cache — key: hash(model + url + compressUserMessages + messages JSON)
 interface CachedCompression {
@@ -98,6 +109,7 @@ export const HEADROOM_DEFAULTS = Object.freeze({
   MAX_EFFECTIVE_TIMEOUT_MS,
   DEFAULT_CONNECTION_DOWN_COOLDOWN_MS,
   MAX_HEADROOM_PAYLOAD_BYTES,
+  SKIP_IF_EST_TOKENS_GT,
 });
 
 export function getHeadroomHealth() {
@@ -112,6 +124,8 @@ export function resetHeadroomHealth() {
   lastHealthUrl = "";
   lastProbeTimedOut = false;
   lastConnectionDown = false;
+  probeTimeoutFailures = 0;
+  probeTimeoutWindowStart = 0;
   compressionCache.clear();
 }
 export function clearHeadroomCache() {
@@ -292,6 +306,10 @@ export async function applyHeadroom(
   if (profile.bodyBytes > MAX_HEADROOM_PAYLOAD_BYTES) {
     return { enabled: true, skipped: true, reason: "payload_too_large_for_headroom", inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages };
   }
+  // Early-skip untuk payload sangat besar: >180k tokens hampir pasti timeout Python
+  if (profile.estimatedTokens > SKIP_IF_EST_TOKENS_GT) {
+    return { enabled: true, skipped: true, reason: "payload_too_large_expected_timeout", inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages };
+  }
   // Threshold check: skip small context. Kedua syarat diuji mandiri (AND) —
   // minimumBytes membatasi payload sangat kecil, minimumTokens membatasi konteks kecil.
   if (minimumBytes !== undefined && profile.bodyBytes < minimumBytes) {
@@ -340,13 +358,37 @@ export async function applyHeadroom(
   }
   // Health probe cepat (cached 3s) sebelum fetch berat — hindari buang 800ms jika proxy down.
   // Timeout dianggap inconclusive (busy proxy) → fail-open ke kompresi; hanya definitive-down yang skip + hitung breaker.
+  // Update: 2 probe timeout beruntun dalam 10s dianggap failure (Python lambat) → breaker agar tidak terus bayar 4-6s.
   if (healthProbeMs > 0) {
     const probe = await probeHeadroomHealth(url, healthProbeMs);
     if (!probe.ok && probe.connectionDown) {
-      // R3: Proxy definitif-down (connection refused) → cooldown singkat 5s agar request berikutnya
-      // tidak bayar +8-12s callCompress timeout. Auto-retry tiap 5s tanpa restart gateway.
+      // R3: Proxy definitif-down (connection refused) → cooldown singkat 8s agar request berikutnya
+      // tidak bayar +4-6s callCompress timeout. Auto-retry tanpa restart gateway.
       cooldownUntil = Date.now() + DEFAULT_CONNECTION_DOWN_COOLDOWN_MS;
       return { enabled: true, skipped: true, reason: lastFailureReason, inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages, endpoint: url };
+    }
+    if (!probe.ok && probe.timedOut) {
+      const now = Date.now();
+      if (now - probeTimeoutWindowStart > PROBE_TIMEOUT_WINDOW_MS) {
+        probeTimeoutWindowStart = now;
+        probeTimeoutFailures = 1;
+      } else {
+        probeTimeoutFailures++;
+      }
+      if (probeTimeoutFailures >= PROBE_TIMEOUT_FAILURE_THRESHOLD) {
+        consecutiveFailures++;
+        lastFailureReason = `headroom probe timeout x${probeTimeoutFailures} in ${PROBE_TIMEOUT_WINDOW_MS / 1000}s`;
+        if (consecutiveFailures >= maxFailures) cooldownUntil = Date.now() + cooldownMs;
+        // reset window
+        probeTimeoutFailures = 0;
+        probeTimeoutWindowStart = 0;
+        return { enabled: true, skipped: true, reason: lastFailureReason, inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages, endpoint: url };
+      }
+      // belum threshold → fall-through ke kompresi (fail-open), tidak hitung breaker penuh
+    } else if (probe.timedOut === false && probe.ok) {
+      // probe ok → reset timeout counter
+      probeTimeoutFailures = 0;
+      probeTimeoutWindowStart = 0;
     }
     if (!probe.ok && !probe.timedOut) {
       // Definitive down (HTTP non-ok) → skip + ikut hitung breaker → cooldown penuh
@@ -358,7 +400,7 @@ export async function applyHeadroom(
       if (consecutiveFailures >= maxFailures) cooldownUntil = Date.now() + cooldownMs;
       return { enabled: true, skipped: true, reason: lastFailureReason, inputBytes, outputBytes: inputBytes, savedBytes: 0, savedPercent: 0, durationMs: performance.now() - start, success: false, inputMessages, outputMessages: inputMessages, endpoint: url };
     }
-    // probe.timedOut → fall-through ke kompresi (fail-open), tidak hitung breaker
+    // probe.timedOut yang belum threshold → fall-through ke kompresi (fail-open)
   }
 
   // Snapshot before
@@ -402,6 +444,8 @@ export async function applyHeadroom(
   cooldownUntil = 0;
   lastHealthOk = true;
   lastProbeTimedOut = false;
+  probeTimeoutFailures = 0;
+  probeTimeoutWindowStart = 0;
   lastHealthCheck = Date.now();
 
   // Validate response

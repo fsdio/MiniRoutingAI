@@ -1,7 +1,7 @@
 {
   "optimizers": {
     "rtk": { "enabled": true, "minBytes": 500, "timeoutMs": 500, "failOpen": true },
-    "headroom": { "enabled": true, "minimumTokens": 6000, "minimumBytes": 8000, "timeoutMs": 8000, "failOpen": true, "url": "http://localhost:8787", "maxConsecutiveFailures": 3, "cooldownMs": 30000, "healthProbeMs": 1000, "compressUserMessages": true, "cacheTtlMs": 10000 },
+    "headroom": { "enabled": true, "minimumTokens": 6000, "minimumBytes": 8000, "timeoutMs": 4000, "failOpen": true, "url": "http://localhost:8787", "maxConsecutiveFailures": 2, "cooldownMs": 30000, "healthProbeMs": 500, "compressUserMessages": true, "cacheTtlMs": 10000 },
     "caveman": { "enabled": true, "mode": "lite" },
     "ponytail": { "enabled": true, "mode": "lite" },
     "errorMemory": { "enabled": true, "ttlMs": 300000, "cooldownMs": 30000 },

@@ -1,0 +1,366 @@
+{
+  "timestamp": "2026-09-17T04:43:44.623Z",
+  "juanCfg": {
+    "id": "juan",
+    "baseURL": "https://router.juan.web.id/v1",
+    "apiKeyEnv": "JUAN_API_KEY",
+    "models": [
+      "deepseek-v4-flash"
+    ],
+    "defaultWeight": 3,
+    "avgLatencyMs": 2500,
+    "contextWindows": {
+      "minimax-m3": 1000000
+    }
+  },
+  "juanTargets": [
+    {
+      "provider": "juan",
+      "model": "deepseek-v4-flash",
+      "weight": 3,
+      "reasoning": {
+        "enabled": true
+      }
+    }
+  ],
+  "results": [
+    {
+      "providerId": "juan",
+      "model": "deepseek-v4-flash",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 4758,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": false,
+      "msg": "{\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"\",\"reasoning_content\":\"The user just said \\\"\",\"role\":\"assistant\"}}],\"created\":1789620180,\"id\":\"chatcmpl-b38e209a-5edb-45ac-8ffc-cb8856c33e7c\",\"model\":\"deepseek-v4-flash\",\"object\":\"chat.completion\",\"usage\":{\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cached_tokens\":0,\"completion_thinking_tokens\":5,\"completion_tok",
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cached_tokens": 0,
+        "completion_thinking_tokens": 5,
+        "completion_tokens": 5,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": 0,
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "reasoning_tokens": 5,
+          "rejected_prediction_tokens": 0
+        },
+        "cost": 0.00001,
+        "credit": 0,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 81,
+        "prompt_cache_write_tokens": 0,
+        "prompt_tokens": 22,
+        "prompt_tokens_details": {
+          "accepted_prediction_tokens": 0,
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": 0
+        },
+        "total_tokens": 86
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c572752b73d901-CGK",
+        "connection": "keep-alive",
+        "content-encoding": "zstd",
+        "content-type": "application/json",
+        "date": "Thu, 17 Sep 2026 04:43:00 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=YWWQasvQkojPAOL3tdPKRoTK7EY4NnwZPgtjXsWka0YfxcPwkWSgWEhfHp5BMN9CQkQgTGuHydBiUy%2BWIZVc1FLr8lkYM5AbVVW%2F0K8YCbBuEZkXIkKUp%2BJKD9R2%2BQjj5B%2FGJZo%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170442562095077228268d9d6x2GZAQkX"
+      },
+      "stream": false
+    },
+    {
+      "providerId": "juan",
+      "model": "deepseek-v4-flash",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 2742,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": false,
+      "msg": "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null,\"index\":0,\"logprobs\":null}],\"created\":1789620183,\"id\":\"d28d7af5ebb5434685c55aa8b691df4b\",\"model\":\"deepseek-v4-flash\",\"object\":\"chat.completion.chunk\",\"usage\":null}\n\ndata: {\"choices\":[{\"delta\":{\"reasoning_content\":\"The\"},\"finish_reason\":null,\"index\":0,\"logprobs\":null}],\"created\":1789620183,\"id\":\"d28d7af5ebb5434685c55aa8b691df4b\",\"",
+      "usage": null,
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "no-cache",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c57295bce6d901-CGK",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream",
+        "date": "Thu, 17 Sep 2026 04:43:03 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=XEVfbQ%2BkoDYEC0yo69jsjUv5lMDGBbkMOVuW4g%2BVuFAkm4yMBYJqo5UbG%2FtvAbbdaQulPU2I1LbAAKIF8vEX0TvQxif0nxiXc9wABvOoeBeKv%2F5oW7gRdwf4dTHmBPP1T4uioDg%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170443013986563168268d9d62PMRKIfs"
+      },
+      "stream": true
+    },
+    {
+      "providerId": "juan",
+      "model": "glm-5.3-flash",
+      "status": 0,
+      "ok": false,
+      "latencyMs": 10003,
+      "isUnavailable": false,
+      "msg": "AbortError: The operation was aborted.",
+      "stream": false
+    },
+    {
+      "providerId": "juan",
+      "model": "glm-5.3-flash",
+      "status": 0,
+      "ok": false,
+      "latencyMs": 10004,
+      "isUnavailable": false,
+      "msg": "AbortError: The operation was aborted.",
+      "stream": true
+    },
+    {
+      "providerId": "juan",
+      "model": "minimax-m3",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 1601,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": false,
+      "msg": "{\"base_resp\":{\"status_code\":0,\"status_msg\":\"\"},\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"\\u003cthink\\u003eThe user just said\\u003c/think\\u003e\\n\\n\",\"role\":\"assistant\"}}],\"created\":1789620206,\"id\":\"06faa2ee62a17e3ae845bd8342d2bc18\",\"input_sensitive\":false,\"input_sensitive_type\":0,\"model\":\"minimax-m3\",\"object\":\"chat.completion\",\"output_sensitive\":false,\"output_sensitive_in",
+      "usage": {
+        "total_tokens": 182,
+        "total_characters": 0,
+        "prompt_tokens": 177,
+        "completion_tokens": 5,
+        "completion_tokens_details": {
+          "reasoning_tokens": 4
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c5732fec7dfdbb-SIN",
+        "connection": "keep-alive",
+        "content-encoding": "zstd",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Thu, 17 Sep 2026 04:43:27 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=H%2B8u8fL6NqDMBpns68Z%2FM3XV%2FK7MP1gDNx7xO%2FBFPj2mnguQUXncuU9QHRuC6uaZZIjCfm9nYaWW6oPXkgIuh3olF9vQc9PJgB0NflVQsphrtKlf2lEGl2pG51LxtkY45vqHAnM%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170443260932688948268d9d6MASFFJWY"
+      },
+      "stream": false
+    },
+    {
+      "providerId": "juan",
+      "model": "minimax-m3",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 1404,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": false,
+      "msg": "data: {\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}],\"created\":1789620208,\"id\":\"06faa2f09cc02c3249d9fee38b760ead\",\"model\":\"minimax-m3\",\"object\":\"chat.completion.chunk\",\"service_tier\":\"standard\",\"usage\":null}\n\ndata: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\\u003cthink\\u003eThe user said \\\"\",\"role\":\"assistant\"}}],\"created\":1789620208,\"id\":\"06faa2f09cc02c3249d9fee38b760ead\",\"model\":\"minimax-",
+      "usage": null,
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "no-cache",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c5733cec56fdbb-SIN",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream",
+        "date": "Thu, 17 Sep 2026 04:43:29 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=lpgT5Z9oenD%2B9m%2BDFSrKinbI0uYJ6%2F%2Fu%2F4KUFccHhbKSs%2FwRYiviu43SDvMZj4FFzPJUZM1W2DYCbbBlh2xCM7jp2GBa9hUXrr6seHWlyWtth2q6nFW1meoYH%2F3UB%2FRMmk46UlE%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170443281542550958268d9d6va1ii62N"
+      },
+      "stream": true
+    },
+    {
+      "providerId": "juan",
+      "model": "gemini-3.8-flash-high",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 4726,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": false,
+      "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\"},\"finish_reason\":\"stop\"}],\"created\":1789620214,\"id\":\"chatcmpl-82-ravP7C7ncg8UP6qaL6Ag\",\"model\":\"gemini-3.8-flash-high\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2160,\"completion_tokens\":9,\"total_tokens\":2169,\"completion_tokens_details\":{\"reasoning_tokens\":158}}}",
+      "usage": {
+        "prompt_tokens": 2160,
+        "completion_tokens": 9,
+        "total_tokens": 2169,
+        "completion_tokens_details": {
+          "reasoning_tokens": 158
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c573497b61fdbb-SIN",
+        "connection": "keep-alive",
+        "content-encoding": "zstd",
+        "content-type": "application/json",
+        "date": "Thu, 17 Sep 2026 04:43:34 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=otLPWRINQb9IZRP3FUEwYnT3%2BXsZch3YYB2I%2BJAGKHLM7mnrIyGbGnQWoXN%2FiIiixnsP48v5%2FXXE9blHJdpzhF71jAmd22bqUxJPft21lT8KVp9WVuDkfvAogSsUFl2mhdD%2BBbc%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170443301668551038268d9d6MyeITqHS"
+      },
+      "stream": false
+    },
+    {
+      "providerId": "juan",
+      "model": "gemini-3.8-flash-high",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 2506,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": false,
+      "msg": "data: {\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}],\"created\":1789620217,\"id\":\"chatcmpl-92-raqfZNqikg8UP0e-22Qk\",\"model\":\"gemini-3.8-flash-high\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello! How\"},\"finish_reason\":null}],\"created\":1789620217,\"id\":\"chatcmpl-92-raqfZNqikg8UP0e-22Qk\",\"model\":\"gemini-3.8-flash-high\",\"object\":\"cha",
+      "usage": null,
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "no-cache",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c5736ac972fdbb-SIN",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream",
+        "date": "Thu, 17 Sep 2026 04:43:37 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=Ko%2FLLqiwRfhjqz5vfWA1zoSAR8vSB6huSsqY71vsatGrk7xAThXjORZ6DOJ7jWuzY7sVGZ2yPaxoSGpS2RF6%2BsYD3eB%2FdeQfyT27GMkHjBCreougc04nElzUz%2F8v8WpEur0neZw%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170443354931315268268d9d6zkWzByGJ"
+      },
+      "stream": true
+    },
+    {
+      "providerId": "juan",
+      "model": "gemini-3.7-flash-low",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 1767,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": false,
+      "msg": "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\"},\"finish_reason\":\"stop\"}],\"created\":1789620220,\"id\":\"chatcmpl--2-rauCBIK3Qg8UP2K-hUQ\",\"model\":\"gemini-3.7-flash-low\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":2002,\"completion_tokens\":9,\"total_tokens\":2011}}",
+      "usage": {
+        "prompt_tokens": 2002,
+        "completion_tokens": 9,
+        "total_tokens": 2011
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c5737e2ce5fdbb-SIN",
+        "connection": "keep-alive",
+        "content-encoding": "zstd",
+        "content-type": "application/json",
+        "date": "Thu, 17 Sep 2026 04:43:40 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=rgRU37dx8H8Nde%2FA8zT4p%2FeSCbdOwPCLUUhYhxUuE84S1KsAo%2F6V1%2BVYo2Yo2gqiG1wrE9TeSvGNayKNXuUVI%2FjHN9mmo%2BQepaBdgPSt0SGkmkXFlfGiJMvARRn1WxEEGSp5gPA%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170443386041350228268d9d6yC7pp6Ps"
+      },
+      "stream": false
+    },
+    {
+      "providerId": "juan",
+      "model": "gemini-3.7-flash-low",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 1604,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": false,
+      "msg": "data: {\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}],\"created\":1789620222,\"id\":\"chatcmpl-_W-rasaZNeXEg8UPiLihiA4\",\"model\":\"gemini-3.7-flash-low\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello! How can\"},\"finish_reason\":null}],\"created\":1789620222,\"id\":\"chatcmpl-_W-rasaZNeXEg8UPiLihiA4\",\"model\":\"gemini-3.7-flash-low\",\"object\":\"c",
+      "usage": null,
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "no-cache",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c5738cfa7dfdbb-SIN",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream",
+        "date": "Thu, 17 Sep 2026 04:43:42 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=Z7g1Tah5qJT3pMacdrYcDCmt2rpRqCSo%2BCPQUnOpl%2FX9SPUMAZWu2epVxRafLr9y4QlR9utUO%2Bs5Eh00mDDsyZWS2hrHx2LrMVoBeBtDZe%2Ftqdd5bfrksjAke%2BorFpnW4VcytAo%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170443409642015588268d9d61Sy74W56"
+      },
+      "stream": true
+    },
+    {
+      "providerId": "juan",
+      "model": "nemotron-3-ultra",
+      "status": 503,
+      "ok": false,
+      "latencyMs": 259,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": true,
+      "msg": "[openai-compatible-chat-7c249d69-6c34-491a-8d42-c7ad1a8b73c0/posiden/nemotron-3-ultra] [401]: {\"error\":{\"message\":\"upstream error (status 401)\",\"type\":\"authentication_error\",\"param\":null,\"code\":null}} (reset after 55s)",
+      "usage": null,
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c5739acc32fdbb-SIN",
+        "connection": "keep-alive",
+        "content-length": "303",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Thu, 17 Sep 2026 04:43:43 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=emg4Co2m3EB3y72MjNmFc%2BVgSKnBpguBi9G3AYRjkaZIBT5sFyUtPQqBw2Me9ki%2Bd7PoRSCkBlwPoKNkvCtmLt8hl1DbWDqxh5QpXKfFJ8VIYJPKsrqPTYU1akERzYm7Wmj95uI%3D\"}]}",
+        "server": "cloudflare",
+        "x-oneapi-request-id": "202609170443431705690888268d9d6SCpd708A"
+      },
+      "stream": false
+    },
+    {
+      "providerId": "juan",
+      "model": "nemotron-3-ultra",
+      "status": 503,
+      "ok": false,
+      "latencyMs": 171,
+      "isUnavailable": false,
+      "isNotFound": false,
+      "hasResetHint": true,
+      "msg": "[openai-compatible-chat-7c249d69-6c34-491a-8d42-c7ad1a8b73c0/posiden/nemotron-3-ultra] [401]: {\"error\":{\"message\":\"upstream error (status 401)\",\"type\":\"authentication_error\",\"param\":null,\"code\":null}} (reset after 55s)",
+      "usage": null,
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "no-cache",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a3c573a02d33fdbb-SIN",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream",
+        "date": "Thu, 17 Sep 2026 04:43:44 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=DC1K2T3Ogpwc7jYnuKnnnKGoamGOlMwRGmnkO0jPJ8aIQ7AsN3xm%2FmWWdjAK%2BHvRmm%2BOTYEcRObTYhaoSNSu%2F1653CgLB5IdzqfxwQGdvrluhlOFyXsGfUv7Ga1xrD%2BHNjfieNg%3D\"}]}",
+        "server": "cloudflare",
+        "transfer-encoding": "chunked",
+        "x-oneapi-request-id": "202609170443440360566878268d9d6v6ONlJ6j"
+      },
+      "stream": true
+    }
+  ]
+}

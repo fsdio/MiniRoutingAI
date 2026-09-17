@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { Router } from "../src/router/router.ts";
+import { Router, extractRetryAfterMs } from "../src/router/router.ts";
 import { HealthStore, globalHealthStore } from "../src/router/health.ts";
 import { classifyError, shouldFallback } from "../src/router/policy.ts";
 import { createServer } from "../src/server/server.ts";
@@ -306,7 +306,7 @@ describe("Phase 3 — Routing + Fallback", () => {
     fallbackMock.stop(true);
   });
 
-  test("Router — cooldown skips failing provider", async () => {
+  test("Router — flat sequential: cooldown tidak pre-skip, semua kandidat di-hit berurutan", async () => {
     let primaryCalled = 0;
     const primaryMock = createMockServer(() => {
       primaryCalled++;
@@ -336,30 +336,30 @@ describe("Phase 3 — Routing + Fallback", () => {
       { healthStore: store },
     );
 
-    // First call: primary fails transient → fallback, primary marked cooldown
+    // First call: primary gagal actual (503) → fallback sukses, primary cooldown untuk observability
     const r1 = await router.routeChat({ model: "x", messages: [{ role: "user", content: "hi" }] });
     expect(r1.provider).toBe("fallback");
     expect(primaryCalled).toBe(1);
     expect(store.isHealthy("primary", "m-a")).toBe(false);
 
-    // Second call immediately: primary should be skipped due to cooldown, directly fallback
+    // Second call segera: dengan flat list tanpa guard pre-skip, primary TETAP di-hit (bukan skip)
+    // → gagal lagi 503 → fallback lagi
     primaryCalled = 0;
     const r2 = await router.routeChat({ model: "x", messages: [{ role: "user", content: "hi" }] });
     expect(r2.provider).toBe("fallback");
-    expect(primaryCalled).toBe(0);
-    expect(r2.attempts[0].skippedDueToCooldown).toBe(true);
+    expect(primaryCalled).toBe(1);
+    expect(r2.attempts[0].errorClass).toBe("transient");
+    expect(r2.attempts[0].skippedDueToCooldown).toBeUndefined();
 
-    // After cooldown expires, primary should be tried again
+    // Setelah cooldown habis, primary tetap di-hit (urutan sama) — kali ini sukses
     now += 6000;
     expect(store.isHealthy("primary", "m-a")).toBe(true);
-    // Make primary now succeed
     primaryMock.stop(true);
     const primaryMock2 = createMockServer(async (req) => {
       primaryCalled++;
       const b: any = await req.json();
       return new Response(JSON.stringify(mockCompletion(b.model)), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    // Need new router with same store but new provider URL
     const router2 = new Router(
       {
         providers: {
@@ -552,6 +552,27 @@ describe("Phase 3 — Routing + Fallback", () => {
     // Pastikan model not found tetap deterministic (jangan tertukar)
     expect(classifyError(404, { error: { message: "model not found" } })).toBe("deterministic");
     expect(classifyError(400, { error: { message: "invalid request: model not found" } })).toBe("deterministic");
+  });
+
+  // === New: insufficient balance / quota habis harus rate_limit (bukan server_error) ===
+  test("classifyError — insufficient_user_quota / credit insufficient harus rate_limit", () => {
+    const q1: any = { error: { message: "credit insufficient balance: balance=205 required=32472", type: "api_error", code: "insufficient_user_quota" } };
+    expect(classifyError(400, q1)).toBe("rate_limit");
+    expect(classifyError(503, q1)).toBe("rate_limit");
+    const q2: any = { error: { message: "credit insufficient balance: balance=1.47 required=2.10" } };
+    expect(classifyError(400, q2)).toBe("rate_limit");
+    expect(classifyError(undefined, null, "insufficient_user_quota (reset after 21s)")).toBe("rate_limit");
+    expect(classifyError(502, null, "no credit on this account")).toBe("rate_limit");
+  });
+
+  // === New: extractRetryAfterMs harus mem-parse hint "(reset after Ns)" dari distributor ===
+  test("extractRetryAfterMs — parse hint reset after Ns", () => {
+    const body: any = { error: { message: "credit insufficient balance: balance=205 required=32472 (reset after 21s)", type: "api_error", code: "insufficient_user_quota" } };
+    expect(extractRetryAfterMs(body)).toBe(21_000);
+    expect(extractRetryAfterMs(undefined, new Headers({ "retry-after": "25" }))).toBe(25_000);
+    expect(extractRetryAfterMs(undefined, { "retry-after": "5" })).toBe(5_000);
+    expect(extractRetryAfterMs({ error: { retry_after: 12 } })).toBe(12_000);
+    expect(extractRetryAfterMs({})).toBeUndefined();
   });
 
   test("Router — Model is unavailable (400) transient fallback → success", async () => {

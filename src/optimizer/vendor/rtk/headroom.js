@@ -101,7 +101,8 @@ function hasUnsafeResponsesInputForCompression(body) {
   if (!Array.isArray(body?.input)) return false;
   return body.input.some((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    return typeof item.type === "string" && item.type !== "message";
+    // Reasoning type aman untuk kompresi (preserve, bukan skip) — enable reasoning untuk headroom
+    return typeof item.type === "string" && item.type !== "message" && item.type !== "reasoning";
   });
 }
 

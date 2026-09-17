@@ -4,21 +4,11 @@
       "strategy": "cache-aware-sticky",
       "warmThresholdRequests": 10,
       "sameProviderFallback": true,
-      "primary": { "provider": "ollama-cloud", "model": "nemotron-3-ultra:cloud", "weight": 10 },
+      "primary": { "provider": "juan", "model": "gpt-4o", "weight": 3 },
       "fallbacks": [
-        { "provider": "ollama-cloud", "model": "gemma4:31b", "weight": 8 },
-        { "provider": "opencode-go", "model": "deepseek-v4-flash", "weight": 10 },
         { "provider": "opencode-go", "model": "deepseek-v4-flash-vision-exp", "weight": 9 },
-        { "provider": "opencode-go", "model": "minimax-m3", "weight": 8 },
-        { "provider": "openrouter", "model": "z-ai/glm-5.3-flash", "weight": 7, "providers": ["relace/fp4"], "reasoning": { "enabled": true } },
         { "provider": "openrouter", "model": "deepseek/deepseek-v4-flash-0731", "weight": 5, "providers": ["open-inference/fp8"], "reasoning": { "enabled": true } },
-        { "provider": "nvidia", "model": "nvidia/nemotron-3-ultra-550b-a55b", "weight": 6 },
-        { "provider": "opencode", "model": "mimo-v2.5-free", "weight": 5 },
-        { "provider": "opencode", "model": "ling-3.0-flash-fin-free", "weight": 5 },
-        { "provider": "opencode", "model": "nemotron-3.5-lightning-free", "weight": 4 },
-        { "provider": "opencode", "model": "nemotron-3-ultra-free", "weight": 3 },
-        { "provider": "juan", "model": "glm-5.3-flash", "weight": 3 },
-        { "provider": "juan", "model": "deepseek-v4-flash", "weight": 2 }
+        { "provider": "juan", "model": "gpt-4o", "weight": 3 }
       ],
       "timeoutMs": 8000,
       "adaptiveTimeout": { "enabled": true, "tokensPerMs": 0.25, "maxMs": 90000 },
@@ -34,9 +24,11 @@
       "sameProviderFallback": true,
       "primary": { "provider": "openrouter", "model": "openrouter/free", "weight": 10 },
       "fallbacks": [
-        { "provider": "opencode", "model": "ling-3.0-flash-fin-free", "weight": 8 },
-        { "provider": "opencode", "model": "mimo-v2.5-free", "weight": 8 },
-        { "provider": "opencode", "model": "nemotron-3-ultra-free", "weight": 6 }
+        { "provider": "ollama-cloud", "model": "nemotron-3-ultra:cloud", "weight": 10 },
+        { "provider": "opencode", "model": "mimo-v2.5-free", "weight": 5 },
+        { "provider": "opencode", "model": "ling-3.0-flash-fin-free", "weight": 5 },
+        { "provider": "opencode", "model": "nemotron-3-ultra-free", "weight": 3 },
+        { "provider": "nvidia", "model": "nvidia/nemotron-3-ultra-550b-a55b", "weight": 6 },
       ],
       "timeoutMs": 8000,
       "adaptiveTimeout": { "enabled": true, "tokensPerMs": 0.25, "maxMs": 90000 },

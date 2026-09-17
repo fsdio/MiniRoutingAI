@@ -14,7 +14,7 @@
       "id": "openrouter",
       "baseURL": "https://openrouter.ai/api/v1",
       "apiKeyEnv": "OPENROUTER_API_KEY",
-      "models": ["deepseek/deepseek-v4-flash-0731", "openrouter/free", "z-ai/glm-5.3-flash"],
+      "models": ["deepseek/deepseek-v4-flash-0731", "openrouter/free"],
       "defaultWeight": 5,
       "avgLatencyMs": 1500,
       "contextWindow": 128000
@@ -54,14 +54,11 @@
       "id": "juan",
       "baseURL": "https://router.juan.web.id/v1",
       "apiKeyEnv": "JUAN_API_KEY",
-      "models": ["glm-5.3-flash", "deepseek-v4-flash"],
+      "models": ["gpt-4o"],
       "defaultWeight": 3,
       "avgLatencyMs": 2500,
       "contextWindows": {
-        "glm-5.3-flash": 128000,
-        "minimax-m3": 1000000,
-        "nemotron-3-ultra": 128000,
-        "gemini-3.8-flash-high": 1000000
+        "gpt-4o": 128000
       }
     }
   ]

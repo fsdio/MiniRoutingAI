@@ -77,18 +77,22 @@ bun run benchmark            # Phase 4: direct vs mini + Phase 5 RTK OFF vs ON +
 HEADROOM_URL=http://localhost:8787 bun run benchmark
 ```
 
-## Providers
+## Providers (DeepSeek-Only, 2026-09-17)
 
-- **Ollama Cloud** — `providers.json: ollama-cloud → https://ollama.com/v1` (dinamis via `OLLAMA_CLOUD_BASE_URL` di `.env`, butuh `OLLAMA_CLOUD_API_KEY`). Model cloud: `nemotron-3-ultra:cloud`, `gemma4:31b`.
-- **Console Go (`opencode-go`)** — `https://opencode.ai/zen/go/v1` membutuhkan `x-opencode-session` (lihat https://opencode.ai/docs/go/#where-can-i-use-it). Gateway meneruskan `x-opencode-session`/`x-opencode-client` dari client; jika header tidak ada, `mini-balanced` otomatis fallback ke `ollama-cloud`/`openrouter` tanpa error.
-- **OpenCode Free** — `https://opencode.ai/zen/v1` tidak butuh session, kirim `x-opencode-client: desktop`.
+MiniRoutingAI kini **hanya melayani `deepseek-v4-flash`** (single-model gateway).
+
+- **juan** — `providers.json: juan → https://router.juan.web.id/v1` (`JUAN_API_KEY`, `deepseek-v4-flash`, `contextWindow:256000`, prioritized `primary` di `balanced`/`free`, weight 10).
+- **opencode-go** — `https://opencode.ai/zen/go/v1` (`deepseek-v4-flash` saja, weight 9, `requiresSession:true`).
+- **openrouter** — `https://openrouter.ai/api/v1` (`deepseek/deepseek-v4-flash-0731` via `open-inference/fp8`, weight 7).
+
+Provider non-deepseek (`nvidia`, `ollama-cloud`, `opencode`) telah dihapus dari `config/providers.json`/`prices.json` pada migrasi deepseek-only. Untuk rollback lihat `docs/deepseek-only-migration.md`.
 
 ## Optimizers
 
 - **RTK** — `config/routes.json: fast {rtk:false}` vs `balanced {rtk:true}` (tool_output dedup, git diff/grep, fail-open, duration <1ms)
  - **Headroom** — `config/routes.json: fast {headroom:false}` vs `balanced {headroom:true}` (context compression via `POST {HEADROOM_URL}/v1/compress`, threshold `minimumTokens:6000` + `minimumBytes:8000`, timeout 8000ms (adaptif +1.5ms/KB, cap 12000ms), `healthProbeMs:1000ms`, `cacheTtlMs:10000`, fail-open). Default `enabled:false`; `balanced` opt-in. Jalankan `headroom proxy --port 8787` sebelum benchmark real provider. Mode `token` (maksimalkan penghematan; benchmark: ±27% hemat, ~10ms setelah warm). Proxy dijalankan dengan `--mode token` oleh `scripts/manage.ps1`. Troubleshooting timeout: `powershell -File scripts/manage.ps1 status`, `Get-Content logs/headroom.log -Tail 50`, `curl http://localhost:3000/debug/headroom` & `curl http://localhost:8787/health`. Jika log berisi `SystemError: pydantic-core incompatible` (pydantic 2.13.5 butuh `pydantic-core==2.46.5`): jalankan `python -m pip install --force-reinstall "pydantic-core==2.46.5"` atau `pipx reinstall headroom-ai`.
-- **Mini-Balanced** — alias virtual `mini-balanced`/`mini-balanced-cloud` → chain `balanced` (primary `ollama-cloud`, fallback `opencode-go`, `opencode`, `openrouter`...). Saat `x-opencode-session` ada, gateway meneruskannya ke `opencode-go` (Console Go); jika tidak ada, `opencode-go` diskip otomatis agar tidak `missing x-opencode-session`.
-- **Mini-Free** — alias virtual `mini-free` → chain `free` (`config/routes.json`): primary `openrouter/free` (Auto: Free OpenRouter, tanpa butuh `x-opencode-session`), fallback `opencode` (zen/v1 `*-free`) + varian `openrouter :free`. Semua kandidat full-free.
+- **Mini-Balanced** — alias virtual `mini-balanced`/`mini-balanced-cloud` → chain `balanced` (primary `juan/deepseek-v4-flash`, fallback `opencode-go/deepseek-v4-flash` → `openrouter/deepseek/deepseek-v4-flash-0731`). Flat sequential; `juan` prioritas tertinggi (weight 10).
+- **Mini-Free** — alias virtual `mini-free` → chain `free` (kini identik dengan `balanced`, deepseek-only). Sebelumnya full-free (`openrouter/free` + `opencode` free) telah di-retire pada migrasi deepseek-only.
 
 ### Invarian Config (anti-regresi, dijaga `tests/anti-regresi.test.ts`)
 

@@ -114,6 +114,15 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
       if ((normalized as any).__providerOrder) delete (normalized as any).__providerOrder;
       if ((normalized as any).__openrouterProviders) delete (normalized as any).__openrouterProviders;
       if ((normalized as any).__reasoning) delete (normalized as any).__reasoning;
+    } else {
+      // Non-OpenRouter: terapkan declarative reasoning dari router (semua model reasoning enabled)
+      const genericReasoning = (request as any).__reasoning as Record<string, any> | undefined;
+      if (genericReasoning) {
+        normalized.reasoning = { ...(normalized.reasoning ?? {}), ...genericReasoning };
+      }
+      if ((normalized as any).__reasoning) delete (normalized as any).__reasoning;
+      if ((normalized as any).__providerOrder) delete (normalized as any).__providerOrder;
+      if ((normalized as any).__openrouterProviders) delete (normalized as any).__openrouterProviders;
     }
 
     return normalized as ChatCompletionRequest;

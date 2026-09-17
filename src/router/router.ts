@@ -1,6 +1,7 @@
-// src/router/router.ts — deterministic fallback router Phase 3
+// src/router/router.ts — flat sequential fallback (tanpa guard pre-skip)
+// Semua kandidat di routes.json di-hit berurutan sampai sukses; gagal aktual → fallback
 import { createProvider, selectProvider } from "../providers/provider.ts";
-import { classifyError, shouldFallback, sortCandidatesByHealth, selectWeightedRandom } from "./policy.ts";
+import { classifyError, shouldFallback } from "./policy.ts";
 import { globalHealthStore, HealthStore } from "./health.ts";
 import type { ChatCompletionRequest, ChatCompletionResponse } from "../types/index.ts";
 import type { ProvidersFile, RoutesFile, RouteTarget, RouteConfig } from "../types/index.ts";
@@ -30,12 +31,21 @@ export function extractRetryAfterMs(body: unknown, headers?: any): number | unde
       const b: any = body as any;
       raw = b.error?.retry_after ?? b.retry_after ?? b.retryAfter;
     }
-    if (raw === undefined || raw === null) return undefined;
-    const n = Number(raw);
-    if (Number.isFinite(n) && n >= 0) return n * 1000;
-    // HTTP-date format
-    const d = Date.parse(String(raw));
-    if (!Number.isNaN(d)) return Math.max(0, d - Date.now());
+    if (raw !== undefined && raw !== null) {
+      // Attempt to extract a numeric value for retry-after
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 0) return n * 1000;
+      // HTTP-date format
+      const d = Date.parse(String(raw));
+      if (!Number.isNaN(d)) return Math.max(0, d - Date.now());
+    }
+  } catch {}
+  // Format "reset after 26s" (juan distributor) — parse dari string body/message,
+  // dilakukan walau header/field retry_after tidak ada
+  try {
+    const serialized = typeof body === "string" ? body : JSON.stringify(body) ?? "";
+    const m = /reset after\s+(\d+)\s*s/i.exec(serialized);
+    if (m) return Number(m[1]) * 1000;
   } catch {}
   return undefined;
 }
@@ -116,17 +126,8 @@ function getCandidates(
     }
   }
 
-  // Health-aware ordering for weighted-round-robin
-  if (route.strategy === "weighted-round-robin" && route.healthAwareOrdering && healthStore) {
-    const requestTags = route.modelHints ?? [];
-    baseCandidates = sortCandidatesByHealth(
-      baseCandidates,
-      healthStore,
-      providers.providers,
-      requestTags,
-      route.minHealthyCandidates
-    );
-  }
+  // Health-aware ordering dinonaktifkan: flat list tanpa guard pre-skip
+  // weight/healthAwareOrdering/minHealthyCandidates diabaikan — semua kandidat di-hit berurutan
 
   return baseCandidates;
 }
@@ -139,6 +140,9 @@ function isUnavailableSignal(body: unknown, message: string): boolean {
   const combined = `${message ?? ""} ${body ? JSON.stringify(body) : ""}`.toLowerCase();
   return (
     combined.includes("unavailable") ||
+    combined.includes("service_unavailable") ||
+    combined.includes("service temporarily overloaded") ||
+    combined.includes("temporarily overloaded") ||
     combined.includes("capacity") ||
     combined.includes("overloaded") ||
     combined.includes("upstream request failed") ||
@@ -184,6 +188,11 @@ export function getContextWindow(providers: ProvidersFile, providerId: string, m
   if (typeof perModel === "number") return perModel;
   const providerDefault = (cfg as any).contextWindow;
   return typeof providerDefault === "number" ? providerDefault : null;
+}
+
+/** @deprecated Flat sequential tanpa guard pre-skip — semua kandidat di-hit berurutan */
+function orderCandidatesByContextWindow(candidates: RouteTarget[], _providers: ProvidersFile): RouteTarget[] {
+  return [...candidates];
 }
 
 export interface StickyCacheEntry {
@@ -253,32 +262,21 @@ export class Router {
     candidates: RouteTarget[],
     route: RouteConfig,
   ): RouteTarget[] {
+    // Sticky pasca-sukses saja: pindahkan target sukses terakhir ke indeks 0 tanpa health check
     const ttlMs = (route as any)?.optimizers?.cacheAffinity?.sessionTtlMs ?? 300_000;
     const sticky = this.stickyStore.get(sessionKey, ttlMs);
-    if (!sticky) {
-      return [...candidates];
-    }
-
+    if (!sticky) return [...candidates];
     const current = sticky.currentTarget;
-    const isHealthy = this.isTargetHealthy(current);
     const foundIndex = candidates.findIndex((c) => c.provider === current.provider && c.model === current.model);
-
-    if (isHealthy && foundIndex !== -1) {
-      const primary = candidates[foundIndex];
-      const rest = candidates.filter((_, idx) => idx !== foundIndex);
-      if (route.sameProviderFallback !== false) {
-        const sameProviderRest = rest.filter((c) => c.provider === primary.provider);
-        const otherProviderRest = rest.filter((c) => c.provider !== primary.provider);
-        return [primary, ...sameProviderRest, ...otherProviderRest];
-      }
-      return [primary, ...rest];
-    } else if (foundIndex !== -1 && route.sameProviderFallback !== false) {
-      const sameProvider = candidates.filter((c) => c.provider === current.provider && (c.model !== current.model || isHealthy));
-      const otherProvider = candidates.filter((c) => c.provider !== current.provider);
-      return [...sameProvider, ...otherProvider];
+    if (foundIndex === -1) return [...candidates];
+    const primary = candidates[foundIndex];
+    const rest = candidates.filter((_, idx) => idx !== foundIndex);
+    if (route.sameProviderFallback !== false) {
+      const sameProviderRest = rest.filter((c) => c.provider === primary.provider);
+      const otherProviderRest = rest.filter((c) => c.provider !== primary.provider);
+      return [primary, ...sameProviderRest, ...otherProviderRest];
     }
-
-    return [...candidates];
+    return [primary, ...rest];
   }
 
   // R5: provider butuh session diambil dari config (requiresSession), bukan hardcode id.
@@ -302,75 +300,30 @@ export class Router {
     let fallbackCount = 0;
     let retryCount = 0;
     let firstError: any = null;
-    let cooldownWaited = false;
-    // Wave 6: estimasi ukuran payload untuk adaptive timeout & contextWindow guard
+    // estTokens hanya untuk adaptive timeout (bukan guard pre-skip)
     const estTokens = Math.ceil(Buffer.byteLength(JSON.stringify(request), "utf-8") / 4);
     const effTimeoutMs = computeAdaptiveTimeout(route?.timeoutMs ?? this.timeoutMs, estTokens, (route as any)?.adaptiveTimeout);
 
-    // For weighted-round-robin, we select candidates dynamically
-    const isWeightedRoundRobin = route?.strategy === "weighted-round-robin";
     const isSticky = route?.strategy === "cache-aware-sticky";
     const sessionKey = this.getSessionKey(request);
 
+    // Flat list tanpa guard pre-skip: primary + fallbacks sesuai urutan config
     let remainingCandidates = [...candidates];
     if (isSticky) {
       remainingCandidates = this.orderCandidatesForSticky(sessionKey, remainingCandidates, route);
     }
 
-    while (remainingCandidates.length > 0 || !cooldownWaited) {
-      if (remainingCandidates.length === 0) {
-        // Semua kandidat di-skip karena cooldown: tunggu cooldown terpendek (maks 10s)
-        // lalu coba sekali lagi, daripada langsung 502 dan biarkan client retry membabi-buta.
-        cooldownWaited = true;
-        const remaining = candidates
-          .map((c) => this.healthStore.getCooldownRemainingMs(c.provider, c.model))
-          .filter((ms) => ms > 0);
-        const waitMs = remaining.length > 0 ? Math.min(Math.min(...remaining) + 50, 10_000) : 0;
-        if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
-        remainingCandidates = [...candidates];
-        if (remainingCandidates.length === 0) break;
-        continue;
-      }
-      // Select next candidate: weighted random for weighted-round-robin, sequential for fallback
-      let target: RouteTarget;
-      let targetIndex: number;
-      
-      if (isWeightedRoundRobin) {
-        target = selectWeightedRandom(remainingCandidates, this.healthStore, this.config.providers.providers, route.modelHints) ?? remainingCandidates[0];
-        targetIndex = remainingCandidates.findIndex((c) => c.provider === target.provider && c.model === target.model);
-      } else {
-        target = remainingCandidates[0];
-        targetIndex = 0;
-      }
+    while (remainingCandidates.length > 0) {
+      // Sequential flat list — selalu ambil indeks 0
+      const target: RouteTarget = remainingCandidates[0];
+      const targetIndex = 0;
 
-      const isFallback = attempts.some((a) => a.success) || attempts.length > 0;
-
-      // Health check: skip if in cooldown
-      if (!this.healthStore.isHealthy(target.provider, target.model)) {
-        attempts.push({
-          provider: target.provider,
-          model: target.model,
-          success: false,
-          skippedDueToCooldown: true,
-          errorClass: "cooldown",
-        });
-        if (isFallback) fallbackCount++;
-        remainingCandidates.splice(targetIndex, 1);
-        continue;
-      }
+      const isFallback = attempts.length > 0;
 
       const providerCfg = findProviderConfig(this.config.providers, target.provider);
       if (!providerCfg) {
         attempts.push({ provider: target.provider, model: target.model, success: false, errorClass: "deterministic" });
         if (!firstError) firstError = Object.assign(new Error(`Provider ${target.provider} not found`), { status: 404 });
-        remainingCandidates.splice(targetIndex, 1);
-        continue;
-      }
-
-      // Wave 6: contextWindow guard — jangan bakar token di model yang pasti gagal muat
-      const ctxWindow = getContextWindow(this.config.providers, target.provider, target.model);
-      if (ctxWindow !== null && estTokens * 1.1 > ctxWindow) {
-        attempts.push({ provider: target.provider, model: target.model, success: false, errorClass: "context_overflow", skippedDueToContext: true });
         remainingCandidates.splice(targetIndex, 1);
         continue;
       }
@@ -434,6 +387,10 @@ export class Router {
           const lower = `${message ?? ""} ${body ? JSON.stringify(body) : ""}`.toLowerCase();
           if (!retryAfter && lower.includes("weekly usage limit")) retryAfter = 3_600_000;
           else if (!retryAfter && lower.includes("usage limit")) retryAfter = 600_000;
+          // Kuota saldo/account habis (insufficient_user_quota / credit insufficient / prompt tokens limit) — PERSISTEN sampai top-up.
+          // Hint "reset after Ns" dari distributor adalah reset slot request, BUKAN isi ulang saldo → cooldown panjang,
+          // jangan biarkan provider menjadi honeypot yang menghantam ulang dan melempar 503 tiap ~20s.
+          if (lower.includes("insufficient balance") || lower.includes("insufficient_user_quota") || lower.includes("credit insufficient") || lower.includes("no credit") || lower.includes("prompt tokens limit exceeded") || lower.includes("openrouter.ai/settings/credits")) retryAfter = 600_000;
           this.healthStore.markFailure(target.provider, target.model, errorClass, { isUnavailable, retryAfterMs: retryAfter });
           if (isMissingSessionSignal(body, message)) {
             // Log hint untuk missing session agar observability jelas
@@ -472,6 +429,27 @@ export class Router {
       }
     }
 
+    // Graceful 413 jika semua provider benar-benar mengembalikan context_overflow (bukan pre-skip)
+    const isAllContextOverflowChat = attempts.length > 0 && attempts.every((a) => a.errorClass === "context_overflow");
+    if (isAllContextOverflowChat) {
+      const maxWindow = Math.max(0, ...candidates.map((c) => getContextWindow(this.config.providers, c.provider, c.model) ?? 0));
+      const err: any = Object.assign(new Error(`All providers context_overflow: estTokens ${estTokens} exceeds max window ${maxWindow}`), {
+        status: 413,
+        body: {
+          error: {
+            message: `Prompt too large: ~${estTokens} tokens exceeds max context window ${maxWindow}. Kurangi riwayat tool atau pakai model 1M (minimax-m3/gemini).`,
+            type: "invalid_request_error",
+            code: "context_overflow",
+            estTokens,
+            maxWindow,
+            attempts,
+          },
+        },
+        attempts,
+      });
+      err.attempts = attempts;
+      throw err;
+    }
     // All candidates skipped or failed - attach attempts if possible
     if (firstError) {
       (firstError as any).attempts = attempts;
@@ -491,65 +469,29 @@ export class Router {
 
     const attempts: RouteAttempt[] = [];
     let fallbackCount = 0;
-    let cooldownWaited = false;
-    // Wave 6: estTokens + adaptive timeout (stream path — TTFT reasoning butuh waktu)
+    // estTokens hanya untuk adaptive timeout (bukan guard pre-skip)
     const estTokens = Math.ceil(Buffer.byteLength(JSON.stringify(request), "utf-8") / 4);
     const effTimeoutMs = computeAdaptiveTimeout(route?.timeoutMs ?? this.timeoutMs, estTokens, (route as any)?.adaptiveTimeout);
 
-    const isWeightedRoundRobin = route?.strategy === "weighted-round-robin";
     const isSticky = route?.strategy === "cache-aware-sticky";
     const sessionKey = this.getSessionKey(request);
 
+    // Flat list tanpa guard pre-skip: primary + fallbacks sesuai urutan config
     let remainingCandidates = [...candidates];
     if (isSticky) {
       remainingCandidates = this.orderCandidatesForSticky(sessionKey, remainingCandidates, route);
     }
 
-    while (remainingCandidates.length > 0 || !cooldownWaited) {
-      if (remainingCandidates.length === 0) {
-        // Semua kandidat di-skip karena cooldown: tunggu cooldown terpendek (maks 10s)
-        // lalu coba sekali lagi, daripada langsung 502 dan biarkan client retry membabi-buta.
-        cooldownWaited = true;
-        const remaining = candidates
-          .map((c) => this.healthStore.getCooldownRemainingMs(c.provider, c.model))
-          .filter((ms) => ms > 0);
-        const waitMs = remaining.length > 0 ? Math.min(Math.min(...remaining) + 50, 10_000) : 0;
-        if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
-        remainingCandidates = [...candidates];
-        if (remainingCandidates.length === 0) break;
-        continue;
-      }
-      let target: RouteTarget;
-      let targetIndex: number;
-      
-      if (isWeightedRoundRobin) {
-        target = selectWeightedRandom(remainingCandidates, this.healthStore, this.config.providers.providers, route.modelHints) ?? remainingCandidates[0];
-        targetIndex = remainingCandidates.findIndex((c) => c.provider === target.provider && c.model === target.model);
-      } else {
-        target = remainingCandidates[0];
-        targetIndex = 0;
-      }
+    while (remainingCandidates.length > 0) {
+      // Sequential flat list — selalu ambil indeks 0
+      const target: RouteTarget = remainingCandidates[0];
+      const targetIndex = 0;
 
-      const isFallback = attempts.some((a) => a.success) || attempts.length > 0;
-
-      if (!this.healthStore.isHealthy(target.provider, target.model)) {
-        attempts.push({ provider: target.provider, model: target.model, success: false, skippedDueToCooldown: true, errorClass: "cooldown" });
-        if (isFallback) fallbackCount++;
-        remainingCandidates.splice(targetIndex, 1);
-        continue;
-      }
+      const isFallback = attempts.length > 0;
 
       const providerCfg = findProviderConfig(this.config.providers, target.provider);
       if (!providerCfg) {
         attempts.push({ provider: target.provider, model: target.model, success: false, errorClass: "deterministic" });
-        remainingCandidates.splice(targetIndex, 1);
-        continue;
-      }
-
-      // Wave 6: contextWindow guard (stream)
-      const ctxWindowS = getContextWindow(this.config.providers, target.provider, target.model);
-      if (ctxWindowS !== null && estTokens * 1.1 > ctxWindowS) {
-        attempts.push({ provider: target.provider, model: target.model, success: false, errorClass: "context_overflow", skippedDueToContext: true });
         remainingCandidates.splice(targetIndex, 1);
         continue;
       }
@@ -601,6 +543,10 @@ export class Router {
           const lower2 = `${message ?? ""} ${body ? JSON.stringify(body) : ""}`.toLowerCase();
           if (!retryAfter && lower2.includes("weekly usage limit")) retryAfter = 3_600_000;
           else if (!retryAfter && lower2.includes("usage limit")) retryAfter = 600_000;
+          // Kuota saldo/account habis (insufficient_user_quota / credit insufficient / prompt tokens limit) — PERSISTEN sampai top-up.
+          // Hint "reset after Ns" dari distributor adalah reset slot request, BUKAN isi ulang saldo → cooldown panjang,
+          // jangan biarkan provider menjadi honeypot yang menghantam ulang dan melempar 503 tiap ~20s.
+          if (lower2.includes("insufficient balance") || lower2.includes("insufficient_user_quota") || lower2.includes("credit insufficient") || lower2.includes("no credit") || lower2.includes("prompt tokens limit exceeded") || lower2.includes("openrouter.ai/settings/credits")) retryAfter = 600_000;
           this.healthStore.markFailure(target.provider, target.model, errorClass, { isUnavailable, retryAfterMs: retryAfter });
           if (isMissingSessionSignal(body, message)) {
             // eslint-disable-next-line no-console
@@ -630,6 +576,33 @@ export class Router {
       }
     }
 
+    const isAllContextOverflowStream = attempts.length > 0 && attempts.every((a) => a.errorClass === "context_overflow");
+    // Jika semua provider benar-benar mengembalikan context_overflow/timeout/rate_limit (bukan pre-skip),
+    // payload memang terlalu besar untuk semua model yang dicoba.
+    const maxWindowAmongCandidates = Math.max(0, ...candidates.map((c) => getContextWindow(this.config.providers, c.provider, c.model) ?? 0));
+    const allProvidersFailedOrUnavailable = attempts.length > 0 && attempts.every(
+      (a) => a.errorClass === "context_overflow" || a.errorClass === "cooldown" || a.errorClass === "timeout" || a.errorClass === "rate_limit",
+    );
+    const isContextOverflowRootCause = isAllContextOverflowStream || (allProvidersFailedOrUnavailable && maxWindowAmongCandidates > 0 && estTokens * 1.05 > maxWindowAmongCandidates);
+    if (isContextOverflowRootCause) {
+      const maxWindow = maxWindowAmongCandidates;
+      const err: any = Object.assign(new Error(`All stream providers context_overflow: estTokens ${estTokens} exceeds max available window ${maxWindow}`), {
+        status: 413,
+        body: {
+          error: {
+            message: `Stream prompt too large: ~${estTokens} tokens exceeds max available context window ${maxWindow}. Provider dengan window besar (minimax-m3) sedang unavailable. Kurangi riwayat atau tunggu beberapa saat.`,
+            type: "invalid_request_error",
+            code: "context_overflow",
+            estTokens,
+            maxWindow,
+            attempts,
+          },
+        },
+        attempts,
+      });
+      err.attempts = attempts;
+      throw err;
+    }
     throw Object.assign(new Error("All stream providers failed or cooldown"), { status: 502, attempts });
   }
 }

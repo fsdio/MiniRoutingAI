@@ -11,7 +11,7 @@ export const CLASS_COOLDOWN_MS: Record<string, number> = {
   timeout: 8_000,
   transient: 15_000,
   credential: 30_000,
-  context_overflow: 60_000, // model tsb tidak akan sanggup untuk payload serupa
+  context_overflow: 15_000, // sebelumnya 60s memblokir request kecil berikutnya; 15s cukup untuk fail-fast tanpa lockout panjang
   deterministic: 0,
   unknown: 15_000,
 };
@@ -31,14 +31,18 @@ export function classifyError(status?: number, body?: unknown, message?: string)
 
   // Context overflow — payload melebihi context window model (biasanya 400, kadang 413/500).
   // Cek sebelum transient agar tidak dianggap "retryable" buta; butuh model context lebih besar atau kompresi.
-  if (combined.includes("context length") || combined.includes("maximum context") || combined.includes("context_length_exceeded") || combined.includes("too many tokens") || combined.includes("input length exceeds") || combined.includes("prompt is too long") || combined.includes("max_tokens") && combined.includes("exceed")) {
+  // Termasuk 413 (Payload Too Large) dari router local guard dan "prompt too large" dari error message.
+  if (status === 413 || combined.includes("context length") || combined.includes("maximum context") || combined.includes("context_length_exceeded") || combined.includes("too many tokens") || combined.includes("input length exceeds") || combined.includes("prompt is too long") || combined.includes("prompt too large") || combined.includes("context_overflow") || combined.includes("max_tokens") && combined.includes("exceed")) {
     return "context_overflow";
   }
 
   // Rate limit — 429 TANPA sinyal availability (429 + "Model is unavailable" = transient capacity, bukan kuota)
   // Juga deteksi "weekly usage limit" / "usage limit" dari Ollama (429 weekly quota) — harus rate_limit dengan cooldown panjang
-  const hasUnavailableSignal = combined.includes("unavailable") || combined.includes("capacity") || combined.includes("overloaded") || combined.includes("server busy") || combined.includes("high demand");
-  if ((status === 429 || combined.includes("rate limit") || combined.includes("too many requests") || combined.includes("quota exceeded") || combined.includes("weekly usage limit") || combined.includes("usage limit")) && !hasUnavailableSignal) {
+  // Dan kuota akun/provider habis: "insufficient balance"/"insufficient_user_quota" (biasanya dibungkus 400/503 oleh distributor) —
+  // bukan server error; retry membabi-buta tidak akan membantu sampai saldo/top-up.
+  const hasUnavailableSignal = combined.includes("unavailable") || combined.includes("service_unavailable") || combined.includes("temporarily overloaded") || combined.includes("capacity") || combined.includes("overloaded") || combined.includes("server busy") || combined.includes("high demand") || combined.includes("no available channel");
+  const isQuotaError = combined.includes("insufficient balance") || combined.includes("credit insufficient") || combined.includes("insufficient_user_quota") || combined.includes("insufficient quota") || combined.includes("no credit") || combined.includes("out of credits") || combined.includes("prompt tokens limit exceeded") || combined.includes("openrouter.ai/settings/credits");
+  if ((status === 429 || combined.includes("rate limit") || combined.includes("too many requests") || combined.includes("quota exceeded") || combined.includes("weekly usage limit") || combined.includes("usage limit") || isQuotaError) && !hasUnavailableSignal) {
     return "rate_limit";
   }
 
@@ -46,8 +50,12 @@ export function classifyError(status?: number, body?: unknown, message?: string)
   // Frase "unavailable" mencakup: "Model is unavailable", "model unavailable", "resource unavailable", "service unavailable", "temporarily unavailable"
   // Juga handle Console Go missing session: https://opencode.ai/docs/go/#where-can-i-use-it
   // dan free tier restriction: "OpenCode's free tier can only be used in OpenCode"
+  // Tambahan: "No available channel" dari juan/distributor adalah kapasitas transient, bukan deterministic
   if (
     combined.includes("unavailable") ||
+    combined.includes("service_unavailable") ||
+    combined.includes("service temporarily overloaded") ||
+    combined.includes("temporarily overloaded") ||
     combined.includes("capacity") ||
     combined.includes("overloaded") ||
     combined.includes("server busy") ||
@@ -58,7 +66,9 @@ export function classifyError(status?: number, body?: unknown, message?: string)
     combined.includes("missing x-opencode") ||
     combined.includes("cannot be routed efficiently") ||
     combined.includes("free tier") ||
-    combined.includes("can only be used in opencode")
+    combined.includes("can only be used in opencode") ||
+    combined.includes("no available channel") ||
+    combined.includes("no available") && combined.includes("channel")
   ) {
     return "transient";
   }
@@ -112,6 +122,7 @@ export interface CandidateScore {
   latencyScore: number;
 }
 
+/** @deprecated Flat sequential refactor — scoring/health ordering dihapus; semua kandidat di-hit berurutan tanpa guard pre-skip */
 export function computeCandidateScores(
   candidates: RouteTarget[],
   healthStore: HealthStore,
@@ -142,6 +153,7 @@ export function computeCandidateScores(
   });
 }
 
+/** @deprecated Flat sequential refactor — health-aware ordering dihapus; flat list tanpa guard pre-skip */
 export function sortCandidatesByHealth(
   candidates: RouteTarget[],
   healthStore: HealthStore,
@@ -166,6 +178,7 @@ export function sortCandidatesByHealth(
   return scored.map((s) => s.target);
 }
 
+/** @deprecated Flat sequential refactor — weighted random dihapus; sequential flat list tanpa guard pre-skip */
 export function selectWeightedRandom(
   candidates: RouteTarget[],
   healthStore: HealthStore,

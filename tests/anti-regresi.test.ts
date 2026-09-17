@@ -78,11 +78,18 @@ describe("Anti-regresi — headroom proxy connection-down (R3)", () => {
     expect(r2.reason).toContain("headroom_cooldown");
   });
 
-  test("payload >4MB → skip payload_too_large_for_headroom tanpa fetch", async () => {
-    const bigContent = "x".repeat(4 * 1024 * 1024 + 1000);
+  test("payload >1.5MB → skip payload_too_large_for_headroom tanpa fetch", async () => {
+    const bigContent = "x".repeat(Math.ceil(1.5 * 1024 * 1024) + 1000);
     const req: any = { model: "test", messages: [{ role: "user", content: bigContent }] };
-    const r = await applyHeadroom(req, mockProfile(1_000_000, 4 * 1024 * 1024 + 2000), { enabled: true, url: "http://127.0.0.1:59999", minimumTokens: 0, minimumBytes: 0, healthProbeMs: 0 });
+    const r = await applyHeadroom(req, mockProfile(1_000_000, Math.ceil(1.5 * 1024 * 1024) + 2000), { enabled: true, url: "http://127.0.0.1:59999", minimumTokens: 0, minimumBytes: 0, healthProbeMs: 0 });
     expect(r.skipped).toBe(true);
     expect(r.reason).toBe("payload_too_large_for_headroom");
+  });
+
+  test("payload >180k tokens → early skip payload_too_large_expected_timeout", async () => {
+    const req: any = { model: "test", messages: [{ role: "user", content: "x".repeat(20000) }] };
+    const r = await applyHeadroom(req, mockProfile(200_000, 500_000), { enabled: true, url: "http://127.0.0.1:59999", minimumTokens: 0, minimumBytes: 0, healthProbeMs: 0 });
+    expect(r.skipped).toBe(true);
+    expect(r.reason).toBe("payload_too_large_expected_timeout");
   });
 });
